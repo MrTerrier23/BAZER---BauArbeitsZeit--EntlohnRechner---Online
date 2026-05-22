@@ -122,6 +122,463 @@ function changePassword() {
     });
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// BAUSTELLEN FUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function toggleBsForm(editData = null) {
+  const form = document.getElementById('bs-form');
+  const isHidden = form.style.display === 'none';
+
+  if (isHidden) {
+    // Formular öffnen
+    form.style.display = 'block';
+    if (editData) {
+      // Edit-Modus
+      document.getElementById('bs-form-title').textContent = 'Baustelle bearbeiten';
+      document.getElementById('bs-edit-id').value = editData.id;
+      document.getElementById('bs-bez').value = editData.bez || '';
+      document.getElementById('bs-kst').value = editData.kst || '';
+      document.getElementById('bs-adr').value = editData.adr || '';
+      document.getElementById('bs-km').value = editData.km || '';
+      document.getElementById('bs-beginn').value = editData.beginn || '';
+      document.getElementById('bs-ende').value = editData.ende || '';
+      document.getElementById('bs-status').value = editData.status || 'aktiv';
+      document.getElementById('bs-notiz').value = editData.notiz || '';
+    } else {
+      // Neu-Modus
+      document.getElementById('bs-form-title').textContent = 'Neue Baustelle';
+      document.getElementById('bs-edit-id').value = '';
+      document.getElementById('bs-bez').value = '';
+      document.getElementById('bs-kst').value = '';
+      document.getElementById('bs-adr').value = '';
+      document.getElementById('bs-km').value = '';
+      document.getElementById('bs-beginn').value = '';
+      document.getElementById('bs-ende').value = '';
+      document.getElementById('bs-status').value = 'aktiv';
+      document.getElementById('bs-notiz').value = '';
+    }
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    form.style.display = 'none';
+  }
+}
+
+function saveBaustelle() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+
+  const bez = document.getElementById('bs-bez').value.trim();
+  if (!bez) return alert('❌ Bezeichnung ist erforderlich!');
+
+  const editId = document.getElementById('bs-edit-id').value;
+
+  const data = {
+    bez:     bez,
+    kst:     document.getElementById('bs-kst').value.trim(),
+    adr:     document.getElementById('bs-adr').value.trim(),
+    km:      parseFloat(document.getElementById('bs-km').value) || 0,
+    beginn:  document.getElementById('bs-beginn').value,
+    ende:    document.getElementById('bs-ende').value,
+    status:  document.getElementById('bs-status').value,
+    notiz:   document.getElementById('bs-notiz').value.trim(),
+    updated: new Date()
+  };
+
+  const saveBtn = document.querySelector('#bs-form .btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+
+  const ref = db.collection('users').doc(user.uid).collection('baustellen');
+  const promise = editId ? ref.doc(editId).update(data) : ref.add({ ...data, created: new Date() });
+
+  promise
+    .then(() => {
+      console.log('✅ Baustelle gespeichert');
+      toggleBsForm();
+      loadBaustellen();
+    })
+    .catch(err => {
+      console.error('❌ Fehler:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    });
+}
+
+function loadBaustellen() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const list = document.getElementById('bs-list');
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">⏳ Lade Baustellen...</div>';
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .orderBy('created', 'desc')
+    .get()
+    .then(snapshot => {
+      if (snapshot.empty) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#888;"><div style="font-size:40px;margin-bottom:12px;">🏗</div><p>Noch keine Baustellen angelegt.</p><p style="font-size:12px;margin-top:4px;">Klicke auf &quot;+ Neue Baustelle&quot;</p></div>';
+        return;
+      }
+
+      let html = '';
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const statusColor = d.status === 'aktiv' ? '#00B050' : d.status === 'geplant' ? '#F5A623' : '#888';
+        const statusLabel = d.status === 'aktiv' ? '● Aktiv' : d.status === 'geplant' ? '● Geplant' : '● Abgeschlossen';
+        html += `
+          <div class="card" style="border-left:3px solid ${statusColor};margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;">${d.bez}</div>
+                <div style="font-size:11px;color:${statusColor};font-weight:600;margin-top:2px;">${statusLabel}</div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn" onclick='editBaustelle(${JSON.stringify({id: doc.id, ...d, created: null, updated: null})})' style="width:auto;padding:5px 10px;font-size:11px;background:var(--bau-steel);">✏️ Bearbeiten</button>
+                <button class="btn" onclick="deleteBaustelle('${doc.id}')" style="width:auto;padding:5px 10px;font-size:11px;background:#d32f2f;">🗑 Löschen</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px;font-size:12px;color:#666;">
+              ${d.kst ? `<div><strong>Kostenstelle:</strong> ${d.kst}</div>` : ''}
+              ${d.km ? `<div><strong>Kilometer:</strong> ${d.km} km</div>` : ''}
+              ${d.adr ? `<div><strong>Adresse:</strong> ${d.adr}</div>` : ''}
+              ${d.beginn ? `<div><strong>Beginn:</strong> ${new Date(d.beginn).toLocaleDateString('de-AT')}</div>` : ''}
+              ${d.ende ? `<div><strong>Ende:</strong> ${new Date(d.ende).toLocaleDateString('de-AT')}</div>` : ''}
+              ${d.notiz ? `<div><strong>Notiz:</strong> ${d.notiz}</div>` : ''}
+            </div>
+          </div>`;
+      });
+
+      list.innerHTML = html;
+      console.log('✅ Baustellen geladen:', snapshot.size);
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Laden:', err);
+      list.innerHTML = '<div class="alert alert-warning">❌ Fehler beim Laden der Baustellen: ' + err.message + '</div>';
+    });
+}
+
+function editBaustelle(data) {
+  toggleBsForm(data);
+}
+
+function deleteBaustelle(id) {
+  if (!confirm('Baustelle wirklich löschen?')) return;
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen').doc(id).delete()
+    .then(() => {
+      console.log('✅ Baustelle gelöscht');
+      loadBaustellen();
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Löschen:', err);
+      alert('❌ Fehler: ' + err.message);
+    });
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// KONSTANTEN
+// ═══════════════════════════════════════════════════════════
+
+const MONATE = ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+// KL-Kalender 2026 – BGH-Daten exakt (W1-W53)
+const KL_2026 = ['K','K','L','K','L','K','L','K','L','K','L','K','L','K','L','L','K','L','L','K','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','K','K','L','L','L','L','L','L','L','L'];
+
+// Österreichische Feiertage fix
+const FT_FIX = {'01-01':'Neujahr','01-06':'Heilige Drei Könige','05-01':'Staatsfeiertag','08-15':'Mariä Himmelfahrt','10-26':'Nationalfeiertag','11-01':'Allerheiligen','12-08':'Mariä Empfängnis','12-25':'Weihnachten','12-26':'Stephanitag'};
+
+// ═══════════════════════════════════════════════════════════
+// HILFSFUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function getDays(m, y) { return new Date(y, m, 0).getDate(); }
+function isWE(d) { return d.getDay() === 0 || d.getDay() === 6; }
+function fmtH(v) { return isNaN(v) || v === 0 ? '–' : v.toFixed(2); }
+function fmt2(v) { return isNaN(v) ? '–' : v.toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function getEaster(y) {
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+  const m2=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m2+114)/31);
+  const da=((h+l-7*m2+114)%31)+1;
+  return new Date(y,mo-1,da);
+}
+
+function isFT(date) {
+  const y=date.getFullYear();
+  const key=String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+  if (FT_FIX[key]) return FT_FIX[key];
+  const e=getEaster(y);
+  const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+  const mov={'Karfreitag':add(e,-2),'Ostermontag':add(e,1),'Christi Himmelfahrt':add(e,39),'Pfingstmontag':add(e,50),'Fronleichnam':add(e,60)};
+  for (const [n,d] of Object.entries(mov)) {
+    if (d.getMonth()===date.getMonth()&&d.getDate()===date.getDate()) return n;
+  }
+  return null;
+}
+
+function getKW(date) {
+  const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())),day=d.getUTCDay()||7;
+  d.setUTCDate(d.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d-y)/86400000)+1)/7);
+}
+
+function getKLTyp(kw, year) {
+  if (year === 2026) return KL_2026[Math.max(0, Math.min(52, kw-1))] || 'L';
+  return kw % 2 === 1 ? 'K' : 'L'; // Fallback andere Jahre
+}
+
+function calcTagStunden(beginn, ende, pause, isWeekend, isFeiertag) {
+  if (!beginn || !ende) return {ges:0, norm:0, ue:0};
+  const [bh,bm]=beginn.split(':').map(Number), [eh,em]=ende.split(':').map(Number);
+  let ges = Math.max(0, (eh*60+em - bh*60-bm)/60 - (parseFloat(pause)||0));
+  ges = Math.round(ges * 4) / 4;
+  if (isWeekend || isFeiertag) return {ges, norm:0, ue:ges};
+  return {ges, norm: Math.min(ges, 9), ue: Math.max(0, ges-9)};
+}
+
+function ermittleTaggeld(arbeitszeit_h, km) {
+  // KV Bau §9: ≥100km = Groß, <3h = kein TG, 3-9h = Klein, ≥9h = Mittel
+  if (km >= 100) return {typ:'Groß', betrag:34.20};
+  if (arbeitszeit_h < 3) return {typ:'–', betrag:0};
+  if (arbeitszeit_h < 9) return {typ:'Klein', betrag:12.85};
+  return {typ:'Mittel', betrag:20.70};
+}
+
+// ═══════════════════════════════════════════════════════════
+// AZ RENDER
+// ═══════════════════════════════════════════════════════════
+
+let azData = {}; // lokaler Cache
+
+function renderAZ() {
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+  const days = getDays(m, y);
+  const tbody = document.getElementById('az-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  let lastKW = -1;
+
+  for (let d = 1; d <= days; d++) {
+    const date = new Date(y, m-1, d);
+    const wd = date.getDay();
+    const we = isWE(date);
+    const ft = isFT(date);
+    const kw = getKW(date);
+    const kwDisp = kw !== lastKW ? kw : '';
+    lastKW = kw;
+    const klTyp = getKLTyp(kw, y);
+    const sv = azData[`${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`] || {};
+    const b = sv.beginn || '';
+    const e = sv.ende || '';
+    const p = sv.pause != null ? sv.pause : 0.5;
+    const h = calcTagStunden(b, e, p, we, !!ft);
+    const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+
+    let rowBg = '';
+    if (ft) rowBg = 'background:#EAF2FF;';
+    else if (we) rowBg = 'background:#FFF8F0;';
+    else if (b) rowBg = 'background:#f0fff4;';
+
+    const dis = we || ft ? 'disabled style="opacity:0.4;"' : '';
+    const dateStr = String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
+    const klBg = klTyp === 'K' ? '#FFF3CD' : '#D1ECF1';
+    const klColor = klTyp === 'K' ? '#856404' : '#0C5460';
+
+    tbody.innerHTML += `<tr style="${rowBg}border-bottom:1px solid #F0EDE8;">
+      <td style="padding:3px 6px;font-size:10px;color:#888;">${kwDisp}</td>
+      <td style="padding:3px 6px;font-size:10px;white-space:nowrap;"><strong>${dateStr}</strong>${ft?'<br><span style="font-size:9px;color:#1A5276;">'+ft+'</span>':''}</td>
+      <td style="padding:3px 6px;font-size:10px;">${WT[wd]}</td>
+      <td style="padding:3px 4px;"><span style="display:inline-flex;width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:${klBg};color:${klColor};">${klTyp}</span></td>
+      <td style="padding:2px 4px;"><input type="time" value="${b}" ${dis} style="width:80px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'beginn')"></td>
+      <td style="padding:2px 4px;"><input type="time" value="${e}" ${dis} style="width:80px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'ende')"></td>
+      <td style="padding:2px 4px;"><input type="number" value="${p}" step="0.25" min="0" ${dis} style="width:44px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'pause')"></td>
+      <td style="padding:3px 6px;font-size:11px;font-weight:700;color:var(--bau-orange);">${h.ges>0?fmtH(h.ges):'–'}</td>
+      <td style="padding:3px 6px;font-size:11px;color:var(--bau-green);">${h.norm>0?fmtH(h.norm):'–'}</td>
+      <td style="padding:3px 6px;font-size:11px;color:#F5A623;">${h.ue>0?fmtH(h.ue):'–'}</td>
+      <td style="padding:2px 4px;"><select style="width:100px;font-size:10px;padding:2px;" onchange="onBaustelleChange(this,${d},${m},${y})" id="az-bs-${d}"><option value="">– Baustelle –</option></select></td>
+      <td style="padding:3px 6px;font-size:10px;color:#666;" id="az-kst-${d}">${sv.kst||'–'}</td>
+      <td style="padding:3px 6px;font-size:10px;color:#666;" id="az-km-${d}">${sv.km||'–'}</td>
+      <td style="padding:3px 6px;font-size:10px;font-weight:600;color:${tg.betrag>0?'var(--bau-green)':'#ccc'};">${tg.typ}</td>
+      <td style="padding:3px 6px;font-size:10px;color:var(--bau-green);">${tg.betrag>0?fmt2(tg.betrag)+' €':'–'}</td>
+      <td style="padding:2px 4px;"><input type="text" value="${sv.notiz||''}" placeholder="..." style="width:100px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'notiz')"></td>
+    </tr>`;
+  }
+
+  fillBaustellenDropdowns(m, y);
+  calcAZSummen(m, y);
+}
+
+function onAZChange(inp, d, m, y, field) {
+  const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+  if (!azData[key]) azData[key] = {};
+  azData[key][field] = inp.value;
+
+  // Taggeld neu berechnen
+  const sv = azData[key];
+  const date = new Date(y, m-1, d);
+  const h = calcTagStunden(sv.beginn||'', sv.ende||'', sv.pause, isWE(date), !!isFT(date));
+  const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+
+  // Row neu rendern ist zu aufwändig – nur Summen updaten
+  calcAZSummen(m, y);
+}
+
+function onBaustelleChange(sel, d, m, y) {
+  const bez = sel.value;
+  const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+  if (!azData[key]) azData[key] = {};
+  azData[key].baustelle = bez;
+
+  // Kst & km aus Baustellendaten
+  const user = auth.currentUser;
+  if (!user || !bez) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .where('bez', '==', bez).limit(1).get()
+    .then(snap => {
+      if (snap.empty) return;
+      const bs = snap.docs[0].data();
+      azData[key].kst = bs.kst || '';
+      azData[key].km = bs.km || 0;
+
+      // UI aktualisieren
+      const kstEl = document.getElementById(`az-kst-${d}`);
+      const kmEl = document.getElementById(`az-km-${d}`);
+      if (kstEl) kstEl.textContent = bs.kst || '–';
+      if (kmEl) kmEl.textContent = bs.km ? bs.km + ' km' : '–';
+      calcAZSummen(m, y);
+    });
+}
+
+function fillBaustellenDropdowns(m, y) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .where('status', '==', 'aktiv').get()
+    .then(snap => {
+      const days = getDays(m, y);
+      for (let d = 1; d <= days; d++) {
+        const sel = document.getElementById(`az-bs-${d}`);
+        if (!sel) continue;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">– Baustelle –</option>';
+        snap.forEach(doc => {
+          const b = doc.data();
+          sel.innerHTML += `<option value="${b.bez}">${b.bez}</option>`;
+        });
+        // Gespeicherten Wert wiederherstellen
+        const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+        if (azData[key]?.baustelle) sel.value = azData[key].baustelle;
+        else if (currentVal) sel.value = currentVal;
+      }
+    });
+}
+
+function calcAZSummen(m, y) {
+  const days = getDays(m, y);
+  let gesS=0, normS=0, ueS=0, tgS=0;
+
+  for (let d = 1; d <= days; d++) {
+    const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+    const sv = azData[key] || {};
+    const date = new Date(y, m-1, d);
+    const h = calcTagStunden(sv.beginn||'', sv.ende||'', sv.pause, isWE(date), !!isFT(date));
+    const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+    gesS += h.ges; normS += h.norm; ueS += h.ue; tgS += tg.betrag;
+  }
+
+  const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  setEl('azs-ges', fmtH(gesS)+' h');
+  setEl('azs-norm', fmtH(normS)+' h');
+  setEl('azs-ue', fmtH(ueS)+' h');
+  setEl('azs-tg', fmt2(tgS)+' €');
+  setEl('azf-ges', fmtH(gesS));
+  setEl('azf-norm', fmtH(normS));
+  setEl('azf-ue', fmtH(ueS));
+  setEl('azf-tg', fmt2(tgS)+' €');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AZ SPEICHERN & LADEN
+// ═══════════════════════════════════════════════════════════
+
+function saveAZ() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+
+  const btn = document.querySelector('[onclick="saveAZ()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Speichert...'; }
+
+  const batch = db.batch();
+  const ref = db.collection('users').doc(user.uid)
+    .collection('arbeitszeiten').doc(`${y}_${String(m).padStart(2,'0')}`);
+
+  batch.set(ref, { data: azData, monat: m, jahr: y, updated: new Date() }, { merge: true });
+
+  batch.commit()
+    .then(() => {
+      console.log('✅ AZ gespeichert');
+      alert('✅ Arbeitszeiten gespeichert!');
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Speichern'; }
+    })
+    .catch(err => {
+      console.error('❌ Fehler:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Speichern'; }
+    });
+}
+
+function loadAZ(m, y) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid)
+    .collection('arbeitszeiten').doc(`${y}_${String(m).padStart(2,'0')}`).get()
+    .then(doc => {
+      if (doc.exists && doc.data().data) {
+        azData = doc.data().data;
+        console.log('✅ AZ geladen für', MONATE[m-1], y);
+      } else {
+        azData = {};
+      }
+      renderAZ();
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Laden:', err);
+      azData = {};
+      renderAZ();
+    });
+}
+
+function initAZ() {
+  const now = new Date();
+  const monatSel = document.getElementById('az-monat');
+  const jahrSel = document.getElementById('az-jahr');
+  if (monatSel) monatSel.value = now.getMonth() + 1;
+  if (jahrSel) jahrSel.value = now.getFullYear();
+  loadAZ(now.getMonth() + 1, now.getFullYear());
+}
+
+
+function loadAZFromSelects() {
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+  loadAZ(m, y);
+}
+
 </script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js">
 // ═══════════════════════════════════════════════════════════
@@ -234,6 +691,463 @@ function changePassword() {
     });
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// BAUSTELLEN FUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function toggleBsForm(editData = null) {
+  const form = document.getElementById('bs-form');
+  const isHidden = form.style.display === 'none';
+
+  if (isHidden) {
+    // Formular öffnen
+    form.style.display = 'block';
+    if (editData) {
+      // Edit-Modus
+      document.getElementById('bs-form-title').textContent = 'Baustelle bearbeiten';
+      document.getElementById('bs-edit-id').value = editData.id;
+      document.getElementById('bs-bez').value = editData.bez || '';
+      document.getElementById('bs-kst').value = editData.kst || '';
+      document.getElementById('bs-adr').value = editData.adr || '';
+      document.getElementById('bs-km').value = editData.km || '';
+      document.getElementById('bs-beginn').value = editData.beginn || '';
+      document.getElementById('bs-ende').value = editData.ende || '';
+      document.getElementById('bs-status').value = editData.status || 'aktiv';
+      document.getElementById('bs-notiz').value = editData.notiz || '';
+    } else {
+      // Neu-Modus
+      document.getElementById('bs-form-title').textContent = 'Neue Baustelle';
+      document.getElementById('bs-edit-id').value = '';
+      document.getElementById('bs-bez').value = '';
+      document.getElementById('bs-kst').value = '';
+      document.getElementById('bs-adr').value = '';
+      document.getElementById('bs-km').value = '';
+      document.getElementById('bs-beginn').value = '';
+      document.getElementById('bs-ende').value = '';
+      document.getElementById('bs-status').value = 'aktiv';
+      document.getElementById('bs-notiz').value = '';
+    }
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    form.style.display = 'none';
+  }
+}
+
+function saveBaustelle() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+
+  const bez = document.getElementById('bs-bez').value.trim();
+  if (!bez) return alert('❌ Bezeichnung ist erforderlich!');
+
+  const editId = document.getElementById('bs-edit-id').value;
+
+  const data = {
+    bez:     bez,
+    kst:     document.getElementById('bs-kst').value.trim(),
+    adr:     document.getElementById('bs-adr').value.trim(),
+    km:      parseFloat(document.getElementById('bs-km').value) || 0,
+    beginn:  document.getElementById('bs-beginn').value,
+    ende:    document.getElementById('bs-ende').value,
+    status:  document.getElementById('bs-status').value,
+    notiz:   document.getElementById('bs-notiz').value.trim(),
+    updated: new Date()
+  };
+
+  const saveBtn = document.querySelector('#bs-form .btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+
+  const ref = db.collection('users').doc(user.uid).collection('baustellen');
+  const promise = editId ? ref.doc(editId).update(data) : ref.add({ ...data, created: new Date() });
+
+  promise
+    .then(() => {
+      console.log('✅ Baustelle gespeichert');
+      toggleBsForm();
+      loadBaustellen();
+    })
+    .catch(err => {
+      console.error('❌ Fehler:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    });
+}
+
+function loadBaustellen() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const list = document.getElementById('bs-list');
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">⏳ Lade Baustellen...</div>';
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .orderBy('created', 'desc')
+    .get()
+    .then(snapshot => {
+      if (snapshot.empty) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#888;"><div style="font-size:40px;margin-bottom:12px;">🏗</div><p>Noch keine Baustellen angelegt.</p><p style="font-size:12px;margin-top:4px;">Klicke auf &quot;+ Neue Baustelle&quot;</p></div>';
+        return;
+      }
+
+      let html = '';
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const statusColor = d.status === 'aktiv' ? '#00B050' : d.status === 'geplant' ? '#F5A623' : '#888';
+        const statusLabel = d.status === 'aktiv' ? '● Aktiv' : d.status === 'geplant' ? '● Geplant' : '● Abgeschlossen';
+        html += `
+          <div class="card" style="border-left:3px solid ${statusColor};margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;">${d.bez}</div>
+                <div style="font-size:11px;color:${statusColor};font-weight:600;margin-top:2px;">${statusLabel}</div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn" onclick='editBaustelle(${JSON.stringify({id: doc.id, ...d, created: null, updated: null})})' style="width:auto;padding:5px 10px;font-size:11px;background:var(--bau-steel);">✏️ Bearbeiten</button>
+                <button class="btn" onclick="deleteBaustelle('${doc.id}')" style="width:auto;padding:5px 10px;font-size:11px;background:#d32f2f;">🗑 Löschen</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px;font-size:12px;color:#666;">
+              ${d.kst ? `<div><strong>Kostenstelle:</strong> ${d.kst}</div>` : ''}
+              ${d.km ? `<div><strong>Kilometer:</strong> ${d.km} km</div>` : ''}
+              ${d.adr ? `<div><strong>Adresse:</strong> ${d.adr}</div>` : ''}
+              ${d.beginn ? `<div><strong>Beginn:</strong> ${new Date(d.beginn).toLocaleDateString('de-AT')}</div>` : ''}
+              ${d.ende ? `<div><strong>Ende:</strong> ${new Date(d.ende).toLocaleDateString('de-AT')}</div>` : ''}
+              ${d.notiz ? `<div><strong>Notiz:</strong> ${d.notiz}</div>` : ''}
+            </div>
+          </div>`;
+      });
+
+      list.innerHTML = html;
+      console.log('✅ Baustellen geladen:', snapshot.size);
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Laden:', err);
+      list.innerHTML = '<div class="alert alert-warning">❌ Fehler beim Laden der Baustellen: ' + err.message + '</div>';
+    });
+}
+
+function editBaustelle(data) {
+  toggleBsForm(data);
+}
+
+function deleteBaustelle(id) {
+  if (!confirm('Baustelle wirklich löschen?')) return;
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen').doc(id).delete()
+    .then(() => {
+      console.log('✅ Baustelle gelöscht');
+      loadBaustellen();
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Löschen:', err);
+      alert('❌ Fehler: ' + err.message);
+    });
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// KONSTANTEN
+// ═══════════════════════════════════════════════════════════
+
+const MONATE = ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+// KL-Kalender 2026 – BGH-Daten exakt (W1-W53)
+const KL_2026 = ['K','K','L','K','L','K','L','K','L','K','L','K','L','K','L','L','K','L','L','K','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','K','K','L','L','L','L','L','L','L','L'];
+
+// Österreichische Feiertage fix
+const FT_FIX = {'01-01':'Neujahr','01-06':'Heilige Drei Könige','05-01':'Staatsfeiertag','08-15':'Mariä Himmelfahrt','10-26':'Nationalfeiertag','11-01':'Allerheiligen','12-08':'Mariä Empfängnis','12-25':'Weihnachten','12-26':'Stephanitag'};
+
+// ═══════════════════════════════════════════════════════════
+// HILFSFUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function getDays(m, y) { return new Date(y, m, 0).getDate(); }
+function isWE(d) { return d.getDay() === 0 || d.getDay() === 6; }
+function fmtH(v) { return isNaN(v) || v === 0 ? '–' : v.toFixed(2); }
+function fmt2(v) { return isNaN(v) ? '–' : v.toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function getEaster(y) {
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+  const m2=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m2+114)/31);
+  const da=((h+l-7*m2+114)%31)+1;
+  return new Date(y,mo-1,da);
+}
+
+function isFT(date) {
+  const y=date.getFullYear();
+  const key=String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+  if (FT_FIX[key]) return FT_FIX[key];
+  const e=getEaster(y);
+  const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+  const mov={'Karfreitag':add(e,-2),'Ostermontag':add(e,1),'Christi Himmelfahrt':add(e,39),'Pfingstmontag':add(e,50),'Fronleichnam':add(e,60)};
+  for (const [n,d] of Object.entries(mov)) {
+    if (d.getMonth()===date.getMonth()&&d.getDate()===date.getDate()) return n;
+  }
+  return null;
+}
+
+function getKW(date) {
+  const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())),day=d.getUTCDay()||7;
+  d.setUTCDate(d.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d-y)/86400000)+1)/7);
+}
+
+function getKLTyp(kw, year) {
+  if (year === 2026) return KL_2026[Math.max(0, Math.min(52, kw-1))] || 'L';
+  return kw % 2 === 1 ? 'K' : 'L'; // Fallback andere Jahre
+}
+
+function calcTagStunden(beginn, ende, pause, isWeekend, isFeiertag) {
+  if (!beginn || !ende) return {ges:0, norm:0, ue:0};
+  const [bh,bm]=beginn.split(':').map(Number), [eh,em]=ende.split(':').map(Number);
+  let ges = Math.max(0, (eh*60+em - bh*60-bm)/60 - (parseFloat(pause)||0));
+  ges = Math.round(ges * 4) / 4;
+  if (isWeekend || isFeiertag) return {ges, norm:0, ue:ges};
+  return {ges, norm: Math.min(ges, 9), ue: Math.max(0, ges-9)};
+}
+
+function ermittleTaggeld(arbeitszeit_h, km) {
+  // KV Bau §9: ≥100km = Groß, <3h = kein TG, 3-9h = Klein, ≥9h = Mittel
+  if (km >= 100) return {typ:'Groß', betrag:34.20};
+  if (arbeitszeit_h < 3) return {typ:'–', betrag:0};
+  if (arbeitszeit_h < 9) return {typ:'Klein', betrag:12.85};
+  return {typ:'Mittel', betrag:20.70};
+}
+
+// ═══════════════════════════════════════════════════════════
+// AZ RENDER
+// ═══════════════════════════════════════════════════════════
+
+let azData = {}; // lokaler Cache
+
+function renderAZ() {
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+  const days = getDays(m, y);
+  const tbody = document.getElementById('az-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  let lastKW = -1;
+
+  for (let d = 1; d <= days; d++) {
+    const date = new Date(y, m-1, d);
+    const wd = date.getDay();
+    const we = isWE(date);
+    const ft = isFT(date);
+    const kw = getKW(date);
+    const kwDisp = kw !== lastKW ? kw : '';
+    lastKW = kw;
+    const klTyp = getKLTyp(kw, y);
+    const sv = azData[`${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`] || {};
+    const b = sv.beginn || '';
+    const e = sv.ende || '';
+    const p = sv.pause != null ? sv.pause : 0.5;
+    const h = calcTagStunden(b, e, p, we, !!ft);
+    const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+
+    let rowBg = '';
+    if (ft) rowBg = 'background:#EAF2FF;';
+    else if (we) rowBg = 'background:#FFF8F0;';
+    else if (b) rowBg = 'background:#f0fff4;';
+
+    const dis = we || ft ? 'disabled style="opacity:0.4;"' : '';
+    const dateStr = String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
+    const klBg = klTyp === 'K' ? '#FFF3CD' : '#D1ECF1';
+    const klColor = klTyp === 'K' ? '#856404' : '#0C5460';
+
+    tbody.innerHTML += `<tr style="${rowBg}border-bottom:1px solid #F0EDE8;">
+      <td style="padding:3px 6px;font-size:10px;color:#888;">${kwDisp}</td>
+      <td style="padding:3px 6px;font-size:10px;white-space:nowrap;"><strong>${dateStr}</strong>${ft?'<br><span style="font-size:9px;color:#1A5276;">'+ft+'</span>':''}</td>
+      <td style="padding:3px 6px;font-size:10px;">${WT[wd]}</td>
+      <td style="padding:3px 4px;"><span style="display:inline-flex;width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:${klBg};color:${klColor};">${klTyp}</span></td>
+      <td style="padding:2px 4px;"><input type="time" value="${b}" ${dis} style="width:80px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'beginn')"></td>
+      <td style="padding:2px 4px;"><input type="time" value="${e}" ${dis} style="width:80px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'ende')"></td>
+      <td style="padding:2px 4px;"><input type="number" value="${p}" step="0.25" min="0" ${dis} style="width:44px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'pause')"></td>
+      <td style="padding:3px 6px;font-size:11px;font-weight:700;color:var(--bau-orange);">${h.ges>0?fmtH(h.ges):'–'}</td>
+      <td style="padding:3px 6px;font-size:11px;color:var(--bau-green);">${h.norm>0?fmtH(h.norm):'–'}</td>
+      <td style="padding:3px 6px;font-size:11px;color:#F5A623;">${h.ue>0?fmtH(h.ue):'–'}</td>
+      <td style="padding:2px 4px;"><select style="width:100px;font-size:10px;padding:2px;" onchange="onBaustelleChange(this,${d},${m},${y})" id="az-bs-${d}"><option value="">– Baustelle –</option></select></td>
+      <td style="padding:3px 6px;font-size:10px;color:#666;" id="az-kst-${d}">${sv.kst||'–'}</td>
+      <td style="padding:3px 6px;font-size:10px;color:#666;" id="az-km-${d}">${sv.km||'–'}</td>
+      <td style="padding:3px 6px;font-size:10px;font-weight:600;color:${tg.betrag>0?'var(--bau-green)':'#ccc'};">${tg.typ}</td>
+      <td style="padding:3px 6px;font-size:10px;color:var(--bau-green);">${tg.betrag>0?fmt2(tg.betrag)+' €':'–'}</td>
+      <td style="padding:2px 4px;"><input type="text" value="${sv.notiz||''}" placeholder="..." style="width:100px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'notiz')"></td>
+    </tr>`;
+  }
+
+  fillBaustellenDropdowns(m, y);
+  calcAZSummen(m, y);
+}
+
+function onAZChange(inp, d, m, y, field) {
+  const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+  if (!azData[key]) azData[key] = {};
+  azData[key][field] = inp.value;
+
+  // Taggeld neu berechnen
+  const sv = azData[key];
+  const date = new Date(y, m-1, d);
+  const h = calcTagStunden(sv.beginn||'', sv.ende||'', sv.pause, isWE(date), !!isFT(date));
+  const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+
+  // Row neu rendern ist zu aufwändig – nur Summen updaten
+  calcAZSummen(m, y);
+}
+
+function onBaustelleChange(sel, d, m, y) {
+  const bez = sel.value;
+  const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+  if (!azData[key]) azData[key] = {};
+  azData[key].baustelle = bez;
+
+  // Kst & km aus Baustellendaten
+  const user = auth.currentUser;
+  if (!user || !bez) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .where('bez', '==', bez).limit(1).get()
+    .then(snap => {
+      if (snap.empty) return;
+      const bs = snap.docs[0].data();
+      azData[key].kst = bs.kst || '';
+      azData[key].km = bs.km || 0;
+
+      // UI aktualisieren
+      const kstEl = document.getElementById(`az-kst-${d}`);
+      const kmEl = document.getElementById(`az-km-${d}`);
+      if (kstEl) kstEl.textContent = bs.kst || '–';
+      if (kmEl) kmEl.textContent = bs.km ? bs.km + ' km' : '–';
+      calcAZSummen(m, y);
+    });
+}
+
+function fillBaustellenDropdowns(m, y) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .where('status', '==', 'aktiv').get()
+    .then(snap => {
+      const days = getDays(m, y);
+      for (let d = 1; d <= days; d++) {
+        const sel = document.getElementById(`az-bs-${d}`);
+        if (!sel) continue;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">– Baustelle –</option>';
+        snap.forEach(doc => {
+          const b = doc.data();
+          sel.innerHTML += `<option value="${b.bez}">${b.bez}</option>`;
+        });
+        // Gespeicherten Wert wiederherstellen
+        const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+        if (azData[key]?.baustelle) sel.value = azData[key].baustelle;
+        else if (currentVal) sel.value = currentVal;
+      }
+    });
+}
+
+function calcAZSummen(m, y) {
+  const days = getDays(m, y);
+  let gesS=0, normS=0, ueS=0, tgS=0;
+
+  for (let d = 1; d <= days; d++) {
+    const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+    const sv = azData[key] || {};
+    const date = new Date(y, m-1, d);
+    const h = calcTagStunden(sv.beginn||'', sv.ende||'', sv.pause, isWE(date), !!isFT(date));
+    const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+    gesS += h.ges; normS += h.norm; ueS += h.ue; tgS += tg.betrag;
+  }
+
+  const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  setEl('azs-ges', fmtH(gesS)+' h');
+  setEl('azs-norm', fmtH(normS)+' h');
+  setEl('azs-ue', fmtH(ueS)+' h');
+  setEl('azs-tg', fmt2(tgS)+' €');
+  setEl('azf-ges', fmtH(gesS));
+  setEl('azf-norm', fmtH(normS));
+  setEl('azf-ue', fmtH(ueS));
+  setEl('azf-tg', fmt2(tgS)+' €');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AZ SPEICHERN & LADEN
+// ═══════════════════════════════════════════════════════════
+
+function saveAZ() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+
+  const btn = document.querySelector('[onclick="saveAZ()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Speichert...'; }
+
+  const batch = db.batch();
+  const ref = db.collection('users').doc(user.uid)
+    .collection('arbeitszeiten').doc(`${y}_${String(m).padStart(2,'0')}`);
+
+  batch.set(ref, { data: azData, monat: m, jahr: y, updated: new Date() }, { merge: true });
+
+  batch.commit()
+    .then(() => {
+      console.log('✅ AZ gespeichert');
+      alert('✅ Arbeitszeiten gespeichert!');
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Speichern'; }
+    })
+    .catch(err => {
+      console.error('❌ Fehler:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Speichern'; }
+    });
+}
+
+function loadAZ(m, y) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid)
+    .collection('arbeitszeiten').doc(`${y}_${String(m).padStart(2,'0')}`).get()
+    .then(doc => {
+      if (doc.exists && doc.data().data) {
+        azData = doc.data().data;
+        console.log('✅ AZ geladen für', MONATE[m-1], y);
+      } else {
+        azData = {};
+      }
+      renderAZ();
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Laden:', err);
+      azData = {};
+      renderAZ();
+    });
+}
+
+function initAZ() {
+  const now = new Date();
+  const monatSel = document.getElementById('az-monat');
+  const jahrSel = document.getElementById('az-jahr');
+  if (monatSel) monatSel.value = now.getMonth() + 1;
+  if (jahrSel) jahrSel.value = now.getFullYear();
+  loadAZ(now.getMonth() + 1, now.getFullYear());
+}
+
+
+function loadAZFromSelects() {
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+  loadAZ(m, y);
+}
+
 </script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js">
 // ═══════════════════════════════════════════════════════════
@@ -344,6 +1258,463 @@ function changePassword() {
         alert('❌ Fehler: ' + err.message);
       }
     });
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// BAUSTELLEN FUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function toggleBsForm(editData = null) {
+  const form = document.getElementById('bs-form');
+  const isHidden = form.style.display === 'none';
+
+  if (isHidden) {
+    // Formular öffnen
+    form.style.display = 'block';
+    if (editData) {
+      // Edit-Modus
+      document.getElementById('bs-form-title').textContent = 'Baustelle bearbeiten';
+      document.getElementById('bs-edit-id').value = editData.id;
+      document.getElementById('bs-bez').value = editData.bez || '';
+      document.getElementById('bs-kst').value = editData.kst || '';
+      document.getElementById('bs-adr').value = editData.adr || '';
+      document.getElementById('bs-km').value = editData.km || '';
+      document.getElementById('bs-beginn').value = editData.beginn || '';
+      document.getElementById('bs-ende').value = editData.ende || '';
+      document.getElementById('bs-status').value = editData.status || 'aktiv';
+      document.getElementById('bs-notiz').value = editData.notiz || '';
+    } else {
+      // Neu-Modus
+      document.getElementById('bs-form-title').textContent = 'Neue Baustelle';
+      document.getElementById('bs-edit-id').value = '';
+      document.getElementById('bs-bez').value = '';
+      document.getElementById('bs-kst').value = '';
+      document.getElementById('bs-adr').value = '';
+      document.getElementById('bs-km').value = '';
+      document.getElementById('bs-beginn').value = '';
+      document.getElementById('bs-ende').value = '';
+      document.getElementById('bs-status').value = 'aktiv';
+      document.getElementById('bs-notiz').value = '';
+    }
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    form.style.display = 'none';
+  }
+}
+
+function saveBaustelle() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+
+  const bez = document.getElementById('bs-bez').value.trim();
+  if (!bez) return alert('❌ Bezeichnung ist erforderlich!');
+
+  const editId = document.getElementById('bs-edit-id').value;
+
+  const data = {
+    bez:     bez,
+    kst:     document.getElementById('bs-kst').value.trim(),
+    adr:     document.getElementById('bs-adr').value.trim(),
+    km:      parseFloat(document.getElementById('bs-km').value) || 0,
+    beginn:  document.getElementById('bs-beginn').value,
+    ende:    document.getElementById('bs-ende').value,
+    status:  document.getElementById('bs-status').value,
+    notiz:   document.getElementById('bs-notiz').value.trim(),
+    updated: new Date()
+  };
+
+  const saveBtn = document.querySelector('#bs-form .btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+
+  const ref = db.collection('users').doc(user.uid).collection('baustellen');
+  const promise = editId ? ref.doc(editId).update(data) : ref.add({ ...data, created: new Date() });
+
+  promise
+    .then(() => {
+      console.log('✅ Baustelle gespeichert');
+      toggleBsForm();
+      loadBaustellen();
+    })
+    .catch(err => {
+      console.error('❌ Fehler:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    });
+}
+
+function loadBaustellen() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const list = document.getElementById('bs-list');
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">⏳ Lade Baustellen...</div>';
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .orderBy('created', 'desc')
+    .get()
+    .then(snapshot => {
+      if (snapshot.empty) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#888;"><div style="font-size:40px;margin-bottom:12px;">🏗</div><p>Noch keine Baustellen angelegt.</p><p style="font-size:12px;margin-top:4px;">Klicke auf &quot;+ Neue Baustelle&quot;</p></div>';
+        return;
+      }
+
+      let html = '';
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const statusColor = d.status === 'aktiv' ? '#00B050' : d.status === 'geplant' ? '#F5A623' : '#888';
+        const statusLabel = d.status === 'aktiv' ? '● Aktiv' : d.status === 'geplant' ? '● Geplant' : '● Abgeschlossen';
+        html += `
+          <div class="card" style="border-left:3px solid ${statusColor};margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;">${d.bez}</div>
+                <div style="font-size:11px;color:${statusColor};font-weight:600;margin-top:2px;">${statusLabel}</div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn" onclick='editBaustelle(${JSON.stringify({id: doc.id, ...d, created: null, updated: null})})' style="width:auto;padding:5px 10px;font-size:11px;background:var(--bau-steel);">✏️ Bearbeiten</button>
+                <button class="btn" onclick="deleteBaustelle('${doc.id}')" style="width:auto;padding:5px 10px;font-size:11px;background:#d32f2f;">🗑 Löschen</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px;font-size:12px;color:#666;">
+              ${d.kst ? `<div><strong>Kostenstelle:</strong> ${d.kst}</div>` : ''}
+              ${d.km ? `<div><strong>Kilometer:</strong> ${d.km} km</div>` : ''}
+              ${d.adr ? `<div><strong>Adresse:</strong> ${d.adr}</div>` : ''}
+              ${d.beginn ? `<div><strong>Beginn:</strong> ${new Date(d.beginn).toLocaleDateString('de-AT')}</div>` : ''}
+              ${d.ende ? `<div><strong>Ende:</strong> ${new Date(d.ende).toLocaleDateString('de-AT')}</div>` : ''}
+              ${d.notiz ? `<div><strong>Notiz:</strong> ${d.notiz}</div>` : ''}
+            </div>
+          </div>`;
+      });
+
+      list.innerHTML = html;
+      console.log('✅ Baustellen geladen:', snapshot.size);
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Laden:', err);
+      list.innerHTML = '<div class="alert alert-warning">❌ Fehler beim Laden der Baustellen: ' + err.message + '</div>';
+    });
+}
+
+function editBaustelle(data) {
+  toggleBsForm(data);
+}
+
+function deleteBaustelle(id) {
+  if (!confirm('Baustelle wirklich löschen?')) return;
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen').doc(id).delete()
+    .then(() => {
+      console.log('✅ Baustelle gelöscht');
+      loadBaustellen();
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Löschen:', err);
+      alert('❌ Fehler: ' + err.message);
+    });
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// KONSTANTEN
+// ═══════════════════════════════════════════════════════════
+
+const MONATE = ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+// KL-Kalender 2026 – BGH-Daten exakt (W1-W53)
+const KL_2026 = ['K','K','L','K','L','K','L','K','L','K','L','K','L','K','L','L','K','L','L','K','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','K','K','L','L','L','L','L','L','L','L'];
+
+// Österreichische Feiertage fix
+const FT_FIX = {'01-01':'Neujahr','01-06':'Heilige Drei Könige','05-01':'Staatsfeiertag','08-15':'Mariä Himmelfahrt','10-26':'Nationalfeiertag','11-01':'Allerheiligen','12-08':'Mariä Empfängnis','12-25':'Weihnachten','12-26':'Stephanitag'};
+
+// ═══════════════════════════════════════════════════════════
+// HILFSFUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function getDays(m, y) { return new Date(y, m, 0).getDate(); }
+function isWE(d) { return d.getDay() === 0 || d.getDay() === 6; }
+function fmtH(v) { return isNaN(v) || v === 0 ? '–' : v.toFixed(2); }
+function fmt2(v) { return isNaN(v) ? '–' : v.toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function getEaster(y) {
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+  const m2=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m2+114)/31);
+  const da=((h+l-7*m2+114)%31)+1;
+  return new Date(y,mo-1,da);
+}
+
+function isFT(date) {
+  const y=date.getFullYear();
+  const key=String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+  if (FT_FIX[key]) return FT_FIX[key];
+  const e=getEaster(y);
+  const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+  const mov={'Karfreitag':add(e,-2),'Ostermontag':add(e,1),'Christi Himmelfahrt':add(e,39),'Pfingstmontag':add(e,50),'Fronleichnam':add(e,60)};
+  for (const [n,d] of Object.entries(mov)) {
+    if (d.getMonth()===date.getMonth()&&d.getDate()===date.getDate()) return n;
+  }
+  return null;
+}
+
+function getKW(date) {
+  const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())),day=d.getUTCDay()||7;
+  d.setUTCDate(d.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d-y)/86400000)+1)/7);
+}
+
+function getKLTyp(kw, year) {
+  if (year === 2026) return KL_2026[Math.max(0, Math.min(52, kw-1))] || 'L';
+  return kw % 2 === 1 ? 'K' : 'L'; // Fallback andere Jahre
+}
+
+function calcTagStunden(beginn, ende, pause, isWeekend, isFeiertag) {
+  if (!beginn || !ende) return {ges:0, norm:0, ue:0};
+  const [bh,bm]=beginn.split(':').map(Number), [eh,em]=ende.split(':').map(Number);
+  let ges = Math.max(0, (eh*60+em - bh*60-bm)/60 - (parseFloat(pause)||0));
+  ges = Math.round(ges * 4) / 4;
+  if (isWeekend || isFeiertag) return {ges, norm:0, ue:ges};
+  return {ges, norm: Math.min(ges, 9), ue: Math.max(0, ges-9)};
+}
+
+function ermittleTaggeld(arbeitszeit_h, km) {
+  // KV Bau §9: ≥100km = Groß, <3h = kein TG, 3-9h = Klein, ≥9h = Mittel
+  if (km >= 100) return {typ:'Groß', betrag:34.20};
+  if (arbeitszeit_h < 3) return {typ:'–', betrag:0};
+  if (arbeitszeit_h < 9) return {typ:'Klein', betrag:12.85};
+  return {typ:'Mittel', betrag:20.70};
+}
+
+// ═══════════════════════════════════════════════════════════
+// AZ RENDER
+// ═══════════════════════════════════════════════════════════
+
+let azData = {}; // lokaler Cache
+
+function renderAZ() {
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+  const days = getDays(m, y);
+  const tbody = document.getElementById('az-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  let lastKW = -1;
+
+  for (let d = 1; d <= days; d++) {
+    const date = new Date(y, m-1, d);
+    const wd = date.getDay();
+    const we = isWE(date);
+    const ft = isFT(date);
+    const kw = getKW(date);
+    const kwDisp = kw !== lastKW ? kw : '';
+    lastKW = kw;
+    const klTyp = getKLTyp(kw, y);
+    const sv = azData[`${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`] || {};
+    const b = sv.beginn || '';
+    const e = sv.ende || '';
+    const p = sv.pause != null ? sv.pause : 0.5;
+    const h = calcTagStunden(b, e, p, we, !!ft);
+    const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+
+    let rowBg = '';
+    if (ft) rowBg = 'background:#EAF2FF;';
+    else if (we) rowBg = 'background:#FFF8F0;';
+    else if (b) rowBg = 'background:#f0fff4;';
+
+    const dis = we || ft ? 'disabled style="opacity:0.4;"' : '';
+    const dateStr = String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
+    const klBg = klTyp === 'K' ? '#FFF3CD' : '#D1ECF1';
+    const klColor = klTyp === 'K' ? '#856404' : '#0C5460';
+
+    tbody.innerHTML += `<tr style="${rowBg}border-bottom:1px solid #F0EDE8;">
+      <td style="padding:3px 6px;font-size:10px;color:#888;">${kwDisp}</td>
+      <td style="padding:3px 6px;font-size:10px;white-space:nowrap;"><strong>${dateStr}</strong>${ft?'<br><span style="font-size:9px;color:#1A5276;">'+ft+'</span>':''}</td>
+      <td style="padding:3px 6px;font-size:10px;">${WT[wd]}</td>
+      <td style="padding:3px 4px;"><span style="display:inline-flex;width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:${klBg};color:${klColor};">${klTyp}</span></td>
+      <td style="padding:2px 4px;"><input type="time" value="${b}" ${dis} style="width:80px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'beginn')"></td>
+      <td style="padding:2px 4px;"><input type="time" value="${e}" ${dis} style="width:80px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'ende')"></td>
+      <td style="padding:2px 4px;"><input type="number" value="${p}" step="0.25" min="0" ${dis} style="width:44px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'pause')"></td>
+      <td style="padding:3px 6px;font-size:11px;font-weight:700;color:var(--bau-orange);">${h.ges>0?fmtH(h.ges):'–'}</td>
+      <td style="padding:3px 6px;font-size:11px;color:var(--bau-green);">${h.norm>0?fmtH(h.norm):'–'}</td>
+      <td style="padding:3px 6px;font-size:11px;color:#F5A623;">${h.ue>0?fmtH(h.ue):'–'}</td>
+      <td style="padding:2px 4px;"><select style="width:100px;font-size:10px;padding:2px;" onchange="onBaustelleChange(this,${d},${m},${y})" id="az-bs-${d}"><option value="">– Baustelle –</option></select></td>
+      <td style="padding:3px 6px;font-size:10px;color:#666;" id="az-kst-${d}">${sv.kst||'–'}</td>
+      <td style="padding:3px 6px;font-size:10px;color:#666;" id="az-km-${d}">${sv.km||'–'}</td>
+      <td style="padding:3px 6px;font-size:10px;font-weight:600;color:${tg.betrag>0?'var(--bau-green)':'#ccc'};">${tg.typ}</td>
+      <td style="padding:3px 6px;font-size:10px;color:var(--bau-green);">${tg.betrag>0?fmt2(tg.betrag)+' €':'–'}</td>
+      <td style="padding:2px 4px;"><input type="text" value="${sv.notiz||''}" placeholder="..." style="width:100px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'notiz')"></td>
+    </tr>`;
+  }
+
+  fillBaustellenDropdowns(m, y);
+  calcAZSummen(m, y);
+}
+
+function onAZChange(inp, d, m, y, field) {
+  const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+  if (!azData[key]) azData[key] = {};
+  azData[key][field] = inp.value;
+
+  // Taggeld neu berechnen
+  const sv = azData[key];
+  const date = new Date(y, m-1, d);
+  const h = calcTagStunden(sv.beginn||'', sv.ende||'', sv.pause, isWE(date), !!isFT(date));
+  const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+
+  // Row neu rendern ist zu aufwändig – nur Summen updaten
+  calcAZSummen(m, y);
+}
+
+function onBaustelleChange(sel, d, m, y) {
+  const bez = sel.value;
+  const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+  if (!azData[key]) azData[key] = {};
+  azData[key].baustelle = bez;
+
+  // Kst & km aus Baustellendaten
+  const user = auth.currentUser;
+  if (!user || !bez) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .where('bez', '==', bez).limit(1).get()
+    .then(snap => {
+      if (snap.empty) return;
+      const bs = snap.docs[0].data();
+      azData[key].kst = bs.kst || '';
+      azData[key].km = bs.km || 0;
+
+      // UI aktualisieren
+      const kstEl = document.getElementById(`az-kst-${d}`);
+      const kmEl = document.getElementById(`az-km-${d}`);
+      if (kstEl) kstEl.textContent = bs.kst || '–';
+      if (kmEl) kmEl.textContent = bs.km ? bs.km + ' km' : '–';
+      calcAZSummen(m, y);
+    });
+}
+
+function fillBaustellenDropdowns(m, y) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .where('status', '==', 'aktiv').get()
+    .then(snap => {
+      const days = getDays(m, y);
+      for (let d = 1; d <= days; d++) {
+        const sel = document.getElementById(`az-bs-${d}`);
+        if (!sel) continue;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">– Baustelle –</option>';
+        snap.forEach(doc => {
+          const b = doc.data();
+          sel.innerHTML += `<option value="${b.bez}">${b.bez}</option>`;
+        });
+        // Gespeicherten Wert wiederherstellen
+        const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+        if (azData[key]?.baustelle) sel.value = azData[key].baustelle;
+        else if (currentVal) sel.value = currentVal;
+      }
+    });
+}
+
+function calcAZSummen(m, y) {
+  const days = getDays(m, y);
+  let gesS=0, normS=0, ueS=0, tgS=0;
+
+  for (let d = 1; d <= days; d++) {
+    const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+    const sv = azData[key] || {};
+    const date = new Date(y, m-1, d);
+    const h = calcTagStunden(sv.beginn||'', sv.ende||'', sv.pause, isWE(date), !!isFT(date));
+    const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+    gesS += h.ges; normS += h.norm; ueS += h.ue; tgS += tg.betrag;
+  }
+
+  const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  setEl('azs-ges', fmtH(gesS)+' h');
+  setEl('azs-norm', fmtH(normS)+' h');
+  setEl('azs-ue', fmtH(ueS)+' h');
+  setEl('azs-tg', fmt2(tgS)+' €');
+  setEl('azf-ges', fmtH(gesS));
+  setEl('azf-norm', fmtH(normS));
+  setEl('azf-ue', fmtH(ueS));
+  setEl('azf-tg', fmt2(tgS)+' €');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AZ SPEICHERN & LADEN
+// ═══════════════════════════════════════════════════════════
+
+function saveAZ() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+
+  const btn = document.querySelector('[onclick="saveAZ()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Speichert...'; }
+
+  const batch = db.batch();
+  const ref = db.collection('users').doc(user.uid)
+    .collection('arbeitszeiten').doc(`${y}_${String(m).padStart(2,'0')}`);
+
+  batch.set(ref, { data: azData, monat: m, jahr: y, updated: new Date() }, { merge: true });
+
+  batch.commit()
+    .then(() => {
+      console.log('✅ AZ gespeichert');
+      alert('✅ Arbeitszeiten gespeichert!');
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Speichern'; }
+    })
+    .catch(err => {
+      console.error('❌ Fehler:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Speichern'; }
+    });
+}
+
+function loadAZ(m, y) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid)
+    .collection('arbeitszeiten').doc(`${y}_${String(m).padStart(2,'0')}`).get()
+    .then(doc => {
+      if (doc.exists && doc.data().data) {
+        azData = doc.data().data;
+        console.log('✅ AZ geladen für', MONATE[m-1], y);
+      } else {
+        azData = {};
+      }
+      renderAZ();
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Laden:', err);
+      azData = {};
+      renderAZ();
+    });
+}
+
+function initAZ() {
+  const now = new Date();
+  const monatSel = document.getElementById('az-monat');
+  const jahrSel = document.getElementById('az-jahr');
+  if (monatSel) monatSel.value = now.getMonth() + 1;
+  if (jahrSel) jahrSel.value = now.getFullYear();
+  loadAZ(now.getMonth() + 1, now.getFullYear());
+}
+
+
+function loadAZFromSelects() {
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+  loadAZ(m, y);
 }
 
 </script>
@@ -809,7 +2180,7 @@ function changePassword() {
           ✅ Firebase Cloud Storage<br>
           ✅ Responsive Design (Handy/PC/Tablet)<br>
           ✅ Sicher & DSGVO konform<br><br>
-          <strong>v5.1 kommt nächste Woche mit:</strong><br>
+          <strong>v1.1 kommt nächste Woche mit:</strong><br>
           • Arbeitszeiterfassung (KL-Kalender 2026)<br>
           • Lohnzettel-Berechnung (KV Bau)<br>
           • Baustellen-Management<br>
@@ -929,9 +2300,85 @@ function changePassword() {
     
     <!-- WEITERE SEITEN -->
     <section class="page" id="page-azerfassung">
-      <div class="card">
-        <h2>⏱ Arbeitszeiterfassung</h2>
-        <p style="color:#888;font-size:12px;">Kommt in v1.1 – Vollständige AZ-Erfassung mit KL-Kalender 2026.</p>
+      <!-- HEADER -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--bau-orange);flex-wrap:wrap;gap:8px;">
+        <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;">⏱ Arbeitszeiterfassung</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <select id="az-monat" onchange="loadAZFromSelects()" style="padding:6px 10px;font-size:12px;">
+            <option value="1">Jänner</option><option value="2">Februar</option>
+            <option value="3">März</option><option value="4">April</option>
+            <option value="5">Mai</option><option value="6">Juni</option>
+            <option value="7">Juli</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">Oktober</option>
+            <option value="11">November</option><option value="12">Dezember</option>
+          </select>
+          <select id="az-jahr" onchange="loadAZFromSelects()" style="padding:6px 10px;font-size:12px;">
+            <option>2024</option><option>2025</option><option selected>2026</option><option>2027</option>
+          </select>
+          <button class="btn" onclick="saveAZ()" style="width:auto;padding:6px 14px;">💾 Speichern</button>
+        </div>
+      </div>
+
+      <!-- SUMMENKARTEN -->
+      <div class="grid-4" style="margin-bottom:16px;">
+        <div class="stat-card" style="border-left-color:var(--bau-orange);">
+          <div style="font-size:11px;color:#888;font-weight:600;">Gesamt</div>
+          <div class="stat-value" id="azs-ges">–</div>
+          <div style="font-size:10px;color:#999;">Stunden</div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--bau-green);">
+          <div style="font-size:11px;color:#888;font-weight:600;">Normal</div>
+          <div class="stat-value" id="azs-norm">–</div>
+          <div style="font-size:10px;color:#999;">Stunden</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#F5A623;">
+          <div style="font-size:11px;color:#888;font-weight:600;">Überstunden</div>
+          <div class="stat-value" id="azs-ue">–</div>
+          <div style="font-size:10px;color:#999;">Stunden</div>
+        </div>
+        <div class="stat-card" style="border-left-color:var(--bau-steel);">
+          <div style="font-size:11px;color:#888;font-weight:600;">Taggeld</div>
+          <div class="stat-value" id="azs-tg">–</div>
+          <div style="font-size:10px;color:#999;">Euro</div>
+        </div>
+      </div>
+
+      <!-- TABELLE -->
+      <div class="card" style="padding:0;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;" id="az-table">
+          <thead>
+            <tr style="background:var(--bau-steel);color:white;">
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">KW</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Datum</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Tag</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">K/L</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Beginn</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Ende</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Pause</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Ges.h</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Norm.h</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">ÜS.h</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Baustelle</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Kst.</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">km</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Taggeld</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">TG €</th>
+              <th style="padding:8px 6px;text-align:left;font-size:10px;white-space:nowrap;">Notiz</th>
+            </tr>
+          </thead>
+          <tbody id="az-tbody"></tbody>
+          <tfoot>
+            <tr style="background:var(--bau-dark);color:white;font-weight:700;font-size:10px;">
+              <td colspan="7" style="padding:6px 8px;">SUMMEN:</td>
+              <td style="padding:6px 4px;" id="azf-ges">–</td>
+              <td style="padding:6px 4px;" id="azf-norm">–</td>
+              <td style="padding:6px 4px;" id="azf-ue">–</td>
+              <td colspan="4"></td>
+              <td style="padding:6px 4px;" id="azf-tg">–</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </section>
     
@@ -950,9 +2397,66 @@ function changePassword() {
     </section>
     
     <section class="page" id="page-baustellen">
-      <div class="card">
-        <h2>🏗 Baustellen</h2>
-        <p style="color:#888;font-size:12px;">Kommt in v1.1 – Baustellen-Management.</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--bau-orange);flex-wrap:wrap;gap:8px;">
+        <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;">🏗 Baustellen</h2>
+        <button class="btn" onclick="toggleBsForm()" style="width:auto;padding:8px 16px;">+ Neue Baustelle</button>
+      </div>
+
+      <!-- FORMULAR -->
+      <div class="card" id="bs-form" style="display:none;border:2px solid var(--bau-orange);">
+        <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px;" id="bs-form-title">Neue Baustelle</h3>
+        <input type="hidden" id="bs-edit-id">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Bezeichnung *</label>
+            <input type="text" id="bs-bez" placeholder="z.B. Wohnbau Wien 10">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Kostenstelle</label>
+            <input type="text" id="bs-kst" placeholder="z.B. 1042">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Adresse</label>
+            <input type="text" id="bs-adr" placeholder="Musterstraße 1, 1010 Wien">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Kilometer vom Heimatort</label>
+            <input type="number" id="bs-km" placeholder="z.B. 45" step="1" min="0">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Beginn</label>
+            <input type="date" id="bs-beginn">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Ende (geplant)</label>
+            <input type="date" id="bs-ende">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Status</label>
+            <select id="bs-status">
+              <option value="aktiv">Aktiv</option>
+              <option value="geplant">Geplant</option>
+              <option value="abgeschlossen">Abgeschlossen</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Notiz</label>
+            <input type="text" id="bs-notiz" placeholder="Optional...">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button class="btn" onclick="saveBaustelle()" style="width:auto;padding:8px 16px;">💾 Speichern</button>
+          <button class="btn" onclick="toggleBsForm()" style="width:auto;padding:8px 16px;background:var(--bau-steel);">✖ Abbrechen</button>
+        </div>
+      </div>
+
+      <!-- LISTE -->
+      <div id="bs-list">
+        <div style="text-align:center;padding:40px;color:#888;">
+          <div style="font-size:40px;margin-bottom:12px;">🏗</div>
+          <p>Noch keine Baustellen angelegt.</p>
+          <p style="font-size:12px;margin-top:4px;">Klicke auf "+ Neue Baustelle"</p>
+        </div>
       </div>
     </section>
     
@@ -1156,6 +2660,8 @@ function showPage(id) {
   document.getElementById('page-' + id).classList.add('active');
   event.target.classList.add('active');
   if (id === 'benutzer') loadUserProfile();
+  if (id === 'baustellen') loadBaustellen();
+  if (id === 'azerfassung') initAZ();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1289,6 +2795,463 @@ function changePassword() {
         alert('❌ Fehler: ' + err.message);
       }
     });
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// BAUSTELLEN FUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function toggleBsForm(editData = null) {
+  const form = document.getElementById('bs-form');
+  const isHidden = form.style.display === 'none';
+
+  if (isHidden) {
+    // Formular öffnen
+    form.style.display = 'block';
+    if (editData) {
+      // Edit-Modus
+      document.getElementById('bs-form-title').textContent = 'Baustelle bearbeiten';
+      document.getElementById('bs-edit-id').value = editData.id;
+      document.getElementById('bs-bez').value = editData.bez || '';
+      document.getElementById('bs-kst').value = editData.kst || '';
+      document.getElementById('bs-adr').value = editData.adr || '';
+      document.getElementById('bs-km').value = editData.km || '';
+      document.getElementById('bs-beginn').value = editData.beginn || '';
+      document.getElementById('bs-ende').value = editData.ende || '';
+      document.getElementById('bs-status').value = editData.status || 'aktiv';
+      document.getElementById('bs-notiz').value = editData.notiz || '';
+    } else {
+      // Neu-Modus
+      document.getElementById('bs-form-title').textContent = 'Neue Baustelle';
+      document.getElementById('bs-edit-id').value = '';
+      document.getElementById('bs-bez').value = '';
+      document.getElementById('bs-kst').value = '';
+      document.getElementById('bs-adr').value = '';
+      document.getElementById('bs-km').value = '';
+      document.getElementById('bs-beginn').value = '';
+      document.getElementById('bs-ende').value = '';
+      document.getElementById('bs-status').value = 'aktiv';
+      document.getElementById('bs-notiz').value = '';
+    }
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    form.style.display = 'none';
+  }
+}
+
+function saveBaustelle() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+
+  const bez = document.getElementById('bs-bez').value.trim();
+  if (!bez) return alert('❌ Bezeichnung ist erforderlich!');
+
+  const editId = document.getElementById('bs-edit-id').value;
+
+  const data = {
+    bez:     bez,
+    kst:     document.getElementById('bs-kst').value.trim(),
+    adr:     document.getElementById('bs-adr').value.trim(),
+    km:      parseFloat(document.getElementById('bs-km').value) || 0,
+    beginn:  document.getElementById('bs-beginn').value,
+    ende:    document.getElementById('bs-ende').value,
+    status:  document.getElementById('bs-status').value,
+    notiz:   document.getElementById('bs-notiz').value.trim(),
+    updated: new Date()
+  };
+
+  const saveBtn = document.querySelector('#bs-form .btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+
+  const ref = db.collection('users').doc(user.uid).collection('baustellen');
+  const promise = editId ? ref.doc(editId).update(data) : ref.add({ ...data, created: new Date() });
+
+  promise
+    .then(() => {
+      console.log('✅ Baustelle gespeichert');
+      toggleBsForm();
+      loadBaustellen();
+    })
+    .catch(err => {
+      console.error('❌ Fehler:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    });
+}
+
+function loadBaustellen() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const list = document.getElementById('bs-list');
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">⏳ Lade Baustellen...</div>';
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .orderBy('created', 'desc')
+    .get()
+    .then(snapshot => {
+      if (snapshot.empty) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#888;"><div style="font-size:40px;margin-bottom:12px;">🏗</div><p>Noch keine Baustellen angelegt.</p><p style="font-size:12px;margin-top:4px;">Klicke auf &quot;+ Neue Baustelle&quot;</p></div>';
+        return;
+      }
+
+      let html = '';
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const statusColor = d.status === 'aktiv' ? '#00B050' : d.status === 'geplant' ? '#F5A623' : '#888';
+        const statusLabel = d.status === 'aktiv' ? '● Aktiv' : d.status === 'geplant' ? '● Geplant' : '● Abgeschlossen';
+        html += `
+          <div class="card" style="border-left:3px solid ${statusColor};margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;">${d.bez}</div>
+                <div style="font-size:11px;color:${statusColor};font-weight:600;margin-top:2px;">${statusLabel}</div>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn" onclick='editBaustelle(${JSON.stringify({id: doc.id, ...d, created: null, updated: null})})' style="width:auto;padding:5px 10px;font-size:11px;background:var(--bau-steel);">✏️ Bearbeiten</button>
+                <button class="btn" onclick="deleteBaustelle('${doc.id}')" style="width:auto;padding:5px 10px;font-size:11px;background:#d32f2f;">🗑 Löschen</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px;font-size:12px;color:#666;">
+              ${d.kst ? `<div><strong>Kostenstelle:</strong> ${d.kst}</div>` : ''}
+              ${d.km ? `<div><strong>Kilometer:</strong> ${d.km} km</div>` : ''}
+              ${d.adr ? `<div><strong>Adresse:</strong> ${d.adr}</div>` : ''}
+              ${d.beginn ? `<div><strong>Beginn:</strong> ${new Date(d.beginn).toLocaleDateString('de-AT')}</div>` : ''}
+              ${d.ende ? `<div><strong>Ende:</strong> ${new Date(d.ende).toLocaleDateString('de-AT')}</div>` : ''}
+              ${d.notiz ? `<div><strong>Notiz:</strong> ${d.notiz}</div>` : ''}
+            </div>
+          </div>`;
+      });
+
+      list.innerHTML = html;
+      console.log('✅ Baustellen geladen:', snapshot.size);
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Laden:', err);
+      list.innerHTML = '<div class="alert alert-warning">❌ Fehler beim Laden der Baustellen: ' + err.message + '</div>';
+    });
+}
+
+function editBaustelle(data) {
+  toggleBsForm(data);
+}
+
+function deleteBaustelle(id) {
+  if (!confirm('Baustelle wirklich löschen?')) return;
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen').doc(id).delete()
+    .then(() => {
+      console.log('✅ Baustelle gelöscht');
+      loadBaustellen();
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Löschen:', err);
+      alert('❌ Fehler: ' + err.message);
+    });
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// KONSTANTEN
+// ═══════════════════════════════════════════════════════════
+
+const MONATE = ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const WT = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+// KL-Kalender 2026 – BGH-Daten exakt (W1-W53)
+const KL_2026 = ['K','K','L','K','L','K','L','K','L','K','L','K','L','K','L','L','K','L','L','K','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','L','K','K','K','L','L','L','L','L','L','L','L'];
+
+// Österreichische Feiertage fix
+const FT_FIX = {'01-01':'Neujahr','01-06':'Heilige Drei Könige','05-01':'Staatsfeiertag','08-15':'Mariä Himmelfahrt','10-26':'Nationalfeiertag','11-01':'Allerheiligen','12-08':'Mariä Empfängnis','12-25':'Weihnachten','12-26':'Stephanitag'};
+
+// ═══════════════════════════════════════════════════════════
+// HILFSFUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function getDays(m, y) { return new Date(y, m, 0).getDate(); }
+function isWE(d) { return d.getDay() === 0 || d.getDay() === 6; }
+function fmtH(v) { return isNaN(v) || v === 0 ? '–' : v.toFixed(2); }
+function fmt2(v) { return isNaN(v) ? '–' : v.toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function getEaster(y) {
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30;
+  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+  const m2=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m2+114)/31);
+  const da=((h+l-7*m2+114)%31)+1;
+  return new Date(y,mo-1,da);
+}
+
+function isFT(date) {
+  const y=date.getFullYear();
+  const key=String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+  if (FT_FIX[key]) return FT_FIX[key];
+  const e=getEaster(y);
+  const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+  const mov={'Karfreitag':add(e,-2),'Ostermontag':add(e,1),'Christi Himmelfahrt':add(e,39),'Pfingstmontag':add(e,50),'Fronleichnam':add(e,60)};
+  for (const [n,d] of Object.entries(mov)) {
+    if (d.getMonth()===date.getMonth()&&d.getDate()===date.getDate()) return n;
+  }
+  return null;
+}
+
+function getKW(date) {
+  const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())),day=d.getUTCDay()||7;
+  d.setUTCDate(d.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d-y)/86400000)+1)/7);
+}
+
+function getKLTyp(kw, year) {
+  if (year === 2026) return KL_2026[Math.max(0, Math.min(52, kw-1))] || 'L';
+  return kw % 2 === 1 ? 'K' : 'L'; // Fallback andere Jahre
+}
+
+function calcTagStunden(beginn, ende, pause, isWeekend, isFeiertag) {
+  if (!beginn || !ende) return {ges:0, norm:0, ue:0};
+  const [bh,bm]=beginn.split(':').map(Number), [eh,em]=ende.split(':').map(Number);
+  let ges = Math.max(0, (eh*60+em - bh*60-bm)/60 - (parseFloat(pause)||0));
+  ges = Math.round(ges * 4) / 4;
+  if (isWeekend || isFeiertag) return {ges, norm:0, ue:ges};
+  return {ges, norm: Math.min(ges, 9), ue: Math.max(0, ges-9)};
+}
+
+function ermittleTaggeld(arbeitszeit_h, km) {
+  // KV Bau §9: ≥100km = Groß, <3h = kein TG, 3-9h = Klein, ≥9h = Mittel
+  if (km >= 100) return {typ:'Groß', betrag:34.20};
+  if (arbeitszeit_h < 3) return {typ:'–', betrag:0};
+  if (arbeitszeit_h < 9) return {typ:'Klein', betrag:12.85};
+  return {typ:'Mittel', betrag:20.70};
+}
+
+// ═══════════════════════════════════════════════════════════
+// AZ RENDER
+// ═══════════════════════════════════════════════════════════
+
+let azData = {}; // lokaler Cache
+
+function renderAZ() {
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+  const days = getDays(m, y);
+  const tbody = document.getElementById('az-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  let lastKW = -1;
+
+  for (let d = 1; d <= days; d++) {
+    const date = new Date(y, m-1, d);
+    const wd = date.getDay();
+    const we = isWE(date);
+    const ft = isFT(date);
+    const kw = getKW(date);
+    const kwDisp = kw !== lastKW ? kw : '';
+    lastKW = kw;
+    const klTyp = getKLTyp(kw, y);
+    const sv = azData[`${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`] || {};
+    const b = sv.beginn || '';
+    const e = sv.ende || '';
+    const p = sv.pause != null ? sv.pause : 0.5;
+    const h = calcTagStunden(b, e, p, we, !!ft);
+    const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+
+    let rowBg = '';
+    if (ft) rowBg = 'background:#EAF2FF;';
+    else if (we) rowBg = 'background:#FFF8F0;';
+    else if (b) rowBg = 'background:#f0fff4;';
+
+    const dis = we || ft ? 'disabled style="opacity:0.4;"' : '';
+    const dateStr = String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
+    const klBg = klTyp === 'K' ? '#FFF3CD' : '#D1ECF1';
+    const klColor = klTyp === 'K' ? '#856404' : '#0C5460';
+
+    tbody.innerHTML += `<tr style="${rowBg}border-bottom:1px solid #F0EDE8;">
+      <td style="padding:3px 6px;font-size:10px;color:#888;">${kwDisp}</td>
+      <td style="padding:3px 6px;font-size:10px;white-space:nowrap;"><strong>${dateStr}</strong>${ft?'<br><span style="font-size:9px;color:#1A5276;">'+ft+'</span>':''}</td>
+      <td style="padding:3px 6px;font-size:10px;">${WT[wd]}</td>
+      <td style="padding:3px 4px;"><span style="display:inline-flex;width:18px;height:18px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:${klBg};color:${klColor};">${klTyp}</span></td>
+      <td style="padding:2px 4px;"><input type="time" value="${b}" ${dis} style="width:80px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'beginn')"></td>
+      <td style="padding:2px 4px;"><input type="time" value="${e}" ${dis} style="width:80px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'ende')"></td>
+      <td style="padding:2px 4px;"><input type="number" value="${p}" step="0.25" min="0" ${dis} style="width:44px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'pause')"></td>
+      <td style="padding:3px 6px;font-size:11px;font-weight:700;color:var(--bau-orange);">${h.ges>0?fmtH(h.ges):'–'}</td>
+      <td style="padding:3px 6px;font-size:11px;color:var(--bau-green);">${h.norm>0?fmtH(h.norm):'–'}</td>
+      <td style="padding:3px 6px;font-size:11px;color:#F5A623;">${h.ue>0?fmtH(h.ue):'–'}</td>
+      <td style="padding:2px 4px;"><select style="width:100px;font-size:10px;padding:2px;" onchange="onBaustelleChange(this,${d},${m},${y})" id="az-bs-${d}"><option value="">– Baustelle –</option></select></td>
+      <td style="padding:3px 6px;font-size:10px;color:#666;" id="az-kst-${d}">${sv.kst||'–'}</td>
+      <td style="padding:3px 6px;font-size:10px;color:#666;" id="az-km-${d}">${sv.km||'–'}</td>
+      <td style="padding:3px 6px;font-size:10px;font-weight:600;color:${tg.betrag>0?'var(--bau-green)':'#ccc'};">${tg.typ}</td>
+      <td style="padding:3px 6px;font-size:10px;color:var(--bau-green);">${tg.betrag>0?fmt2(tg.betrag)+' €':'–'}</td>
+      <td style="padding:2px 4px;"><input type="text" value="${sv.notiz||''}" placeholder="..." style="width:100px;font-size:10px;padding:2px;" onchange="onAZChange(this,${d},${m},${y},'notiz')"></td>
+    </tr>`;
+  }
+
+  fillBaustellenDropdowns(m, y);
+  calcAZSummen(m, y);
+}
+
+function onAZChange(inp, d, m, y, field) {
+  const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+  if (!azData[key]) azData[key] = {};
+  azData[key][field] = inp.value;
+
+  // Taggeld neu berechnen
+  const sv = azData[key];
+  const date = new Date(y, m-1, d);
+  const h = calcTagStunden(sv.beginn||'', sv.ende||'', sv.pause, isWE(date), !!isFT(date));
+  const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+
+  // Row neu rendern ist zu aufwändig – nur Summen updaten
+  calcAZSummen(m, y);
+}
+
+function onBaustelleChange(sel, d, m, y) {
+  const bez = sel.value;
+  const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+  if (!azData[key]) azData[key] = {};
+  azData[key].baustelle = bez;
+
+  // Kst & km aus Baustellendaten
+  const user = auth.currentUser;
+  if (!user || !bez) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .where('bez', '==', bez).limit(1).get()
+    .then(snap => {
+      if (snap.empty) return;
+      const bs = snap.docs[0].data();
+      azData[key].kst = bs.kst || '';
+      azData[key].km = bs.km || 0;
+
+      // UI aktualisieren
+      const kstEl = document.getElementById(`az-kst-${d}`);
+      const kmEl = document.getElementById(`az-km-${d}`);
+      if (kstEl) kstEl.textContent = bs.kst || '–';
+      if (kmEl) kmEl.textContent = bs.km ? bs.km + ' km' : '–';
+      calcAZSummen(m, y);
+    });
+}
+
+function fillBaustellenDropdowns(m, y) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid).collection('baustellen')
+    .where('status', '==', 'aktiv').get()
+    .then(snap => {
+      const days = getDays(m, y);
+      for (let d = 1; d <= days; d++) {
+        const sel = document.getElementById(`az-bs-${d}`);
+        if (!sel) continue;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">– Baustelle –</option>';
+        snap.forEach(doc => {
+          const b = doc.data();
+          sel.innerHTML += `<option value="${b.bez}">${b.bez}</option>`;
+        });
+        // Gespeicherten Wert wiederherstellen
+        const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+        if (azData[key]?.baustelle) sel.value = azData[key].baustelle;
+        else if (currentVal) sel.value = currentVal;
+      }
+    });
+}
+
+function calcAZSummen(m, y) {
+  const days = getDays(m, y);
+  let gesS=0, normS=0, ueS=0, tgS=0;
+
+  for (let d = 1; d <= days; d++) {
+    const key = `${y}_${String(m).padStart(2,'0')}_${String(d).padStart(2,'0')}`;
+    const sv = azData[key] || {};
+    const date = new Date(y, m-1, d);
+    const h = calcTagStunden(sv.beginn||'', sv.ende||'', sv.pause, isWE(date), !!isFT(date));
+    const tg = ermittleTaggeld(h.ges, parseFloat(sv.km)||0);
+    gesS += h.ges; normS += h.norm; ueS += h.ue; tgS += tg.betrag;
+  }
+
+  const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  setEl('azs-ges', fmtH(gesS)+' h');
+  setEl('azs-norm', fmtH(normS)+' h');
+  setEl('azs-ue', fmtH(ueS)+' h');
+  setEl('azs-tg', fmt2(tgS)+' €');
+  setEl('azf-ges', fmtH(gesS));
+  setEl('azf-norm', fmtH(normS));
+  setEl('azf-ue', fmtH(ueS));
+  setEl('azf-tg', fmt2(tgS)+' €');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AZ SPEICHERN & LADEN
+// ═══════════════════════════════════════════════════════════
+
+function saveAZ() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+
+  const btn = document.querySelector('[onclick="saveAZ()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Speichert...'; }
+
+  const batch = db.batch();
+  const ref = db.collection('users').doc(user.uid)
+    .collection('arbeitszeiten').doc(`${y}_${String(m).padStart(2,'0')}`);
+
+  batch.set(ref, { data: azData, monat: m, jahr: y, updated: new Date() }, { merge: true });
+
+  batch.commit()
+    .then(() => {
+      console.log('✅ AZ gespeichert');
+      alert('✅ Arbeitszeiten gespeichert!');
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Speichern'; }
+    })
+    .catch(err => {
+      console.error('❌ Fehler:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Speichern'; }
+    });
+}
+
+function loadAZ(m, y) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  db.collection('users').doc(user.uid)
+    .collection('arbeitszeiten').doc(`${y}_${String(m).padStart(2,'0')}`).get()
+    .then(doc => {
+      if (doc.exists && doc.data().data) {
+        azData = doc.data().data;
+        console.log('✅ AZ geladen für', MONATE[m-1], y);
+      } else {
+        azData = {};
+      }
+      renderAZ();
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Laden:', err);
+      azData = {};
+      renderAZ();
+    });
+}
+
+function initAZ() {
+  const now = new Date();
+  const monatSel = document.getElementById('az-monat');
+  const jahrSel = document.getElementById('az-jahr');
+  if (monatSel) monatSel.value = now.getMonth() + 1;
+  if (jahrSel) jahrSel.value = now.getFullYear();
+  loadAZ(now.getMonth() + 1, now.getFullYear());
+}
+
+
+function loadAZFromSelects() {
+  const m = parseInt(document.getElementById('az-monat').value);
+  const y = parseInt(document.getElementById('az-jahr').value);
+  loadAZ(m, y);
 }
 
 </script>
