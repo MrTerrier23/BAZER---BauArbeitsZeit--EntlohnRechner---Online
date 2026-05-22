@@ -11,9 +11,342 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
   
   <!-- Firebase SDK - CORRECTED VERSION -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js">
+// ═══════════════════════════════════════════════════════════
+// BENUTZERPROFIL FUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function updateKVLohn() {
+  const besch = document.getElementById('u-besch').value;
+  const lohn = besch.split('|')[1] || '21.96';
+  document.getElementById('u-kvlohn').value = lohn;
+  document.getElementById('u-istlohn').value = lohn;
+}
+
+function loadUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  document.getElementById('u-email').value = user.email || '';
+
+  db.collection('users').doc(user.uid).get()
+    .then(doc => {
+      if (!doc.exists) return;
+      const d = doc.data();
+
+      if (d.vorname)     document.getElementById('u-vorname').value = d.vorname;
+      if (d.nachname)    document.getElementById('u-nachname').value = d.nachname;
+      if (d.svnr)        document.getElementById('u-svnr').value = d.svnr;
+      if (d.adresse)     document.getElementById('u-adresse').value = d.adresse;
+      if (d.firma)       document.getElementById('u-firma').value = d.firma;
+      if (d.firmaadr)    document.getElementById('u-firmaadr').value = d.firmaadr;
+      if (d.pnr)         document.getElementById('u-pnr').value = d.pnr;
+      if (d.seit)        document.getElementById('u-seit').value = d.seit;
+      if (d.azm)         document.getElementById('u-azm').value = d.azm;
+      if (d.kvlohn)      document.getElementById('u-kvlohn').value = d.kvlohn;
+      if (d.istlohn)     document.getElementById('u-istlohn').value = d.istlohn;
+      if (d.urlaubstage) document.getElementById('u-urlaubstage').value = d.urlaubstage;
+      if (d.besch)       document.getElementById('u-besch').value = d.besch;
+      if (d.created) {
+        const date = d.created.toDate ? d.created.toDate().toLocaleDateString('de-AT') : new Date(d.created).toLocaleDateString('de-AT');
+        document.getElementById('u-created').value = date;
+      }
+
+      console.log('✅ Benutzerprofil geladen');
+    })
+    .catch(err => console.error('❌ Fehler beim Laden des Profils:', err));
+}
+
+function saveUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+
+  const data = {
+    vorname:     document.getElementById('u-vorname').value,
+    nachname:    document.getElementById('u-nachname').value,
+    svnr:        document.getElementById('u-svnr').value,
+    adresse:     document.getElementById('u-adresse').value,
+    firma:       document.getElementById('u-firma').value,
+    firmaadr:    document.getElementById('u-firmaadr').value,
+    pnr:         document.getElementById('u-pnr').value,
+    seit:        document.getElementById('u-seit').value,
+    besch:       document.getElementById('u-besch').value,
+    kvlohn:      parseFloat(document.getElementById('u-kvlohn').value) || 21.96,
+    istlohn:     parseFloat(document.getElementById('u-istlohn').value) || 21.96,
+    azm:         document.getElementById('u-azm').value,
+    urlaubstage: parseInt(document.getElementById('u-urlaubstage').value) || 25,
+    email:       user.email,
+    updated:     new Date()
+  };
+
+  const saveBtn = document.querySelector('[onclick="saveUserProfile()"]');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+
+  db.collection('users').doc(user.uid).update(data)
+    .then(() => {
+      console.log('✅ Profil gespeichert');
+      // Header Name aktualisieren
+      document.getElementById('user-name').textContent = data.vorname || user.email.split('@')[0];
+      alert('✅ Profil gespeichert!');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Speichern:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    });
+}
+
+function changePassword() {
+  const newPass = document.getElementById('u-pass-new').value;
+  const confirmPass = document.getElementById('u-pass-confirm').value;
+
+  if (!newPass) return alert('❌ Bitte neues Passwort eingeben!');
+  if (newPass.length < 6) return alert('❌ Passwort muss mindestens 6 Zeichen lang sein!');
+  if (newPass !== confirmPass) return alert('❌ Passwörter stimmen nicht überein!');
+
+  const user = auth.currentUser;
+  user.updatePassword(newPass)
+    .then(() => {
+      alert('✅ Passwort erfolgreich geändert!');
+      document.getElementById('u-pass-new').value = '';
+      document.getElementById('u-pass-confirm').value = '';
+    })
+    .catch(err => {
+      console.error('❌ Passwort-Fehler:', err);
+      if (err.code === 'auth/requires-recent-login') {
+        alert('❌ Bitte abmelden und neu anmelden, dann Passwort ändern!');
+      } else {
+        alert('❌ Fehler: ' + err.message);
+      }
+    });
+}
+
+</script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js">
+// ═══════════════════════════════════════════════════════════
+// BENUTZERPROFIL FUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function updateKVLohn() {
+  const besch = document.getElementById('u-besch').value;
+  const lohn = besch.split('|')[1] || '21.96';
+  document.getElementById('u-kvlohn').value = lohn;
+  document.getElementById('u-istlohn').value = lohn;
+}
+
+function loadUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  document.getElementById('u-email').value = user.email || '';
+
+  db.collection('users').doc(user.uid).get()
+    .then(doc => {
+      if (!doc.exists) return;
+      const d = doc.data();
+
+      if (d.vorname)     document.getElementById('u-vorname').value = d.vorname;
+      if (d.nachname)    document.getElementById('u-nachname').value = d.nachname;
+      if (d.svnr)        document.getElementById('u-svnr').value = d.svnr;
+      if (d.adresse)     document.getElementById('u-adresse').value = d.adresse;
+      if (d.firma)       document.getElementById('u-firma').value = d.firma;
+      if (d.firmaadr)    document.getElementById('u-firmaadr').value = d.firmaadr;
+      if (d.pnr)         document.getElementById('u-pnr').value = d.pnr;
+      if (d.seit)        document.getElementById('u-seit').value = d.seit;
+      if (d.azm)         document.getElementById('u-azm').value = d.azm;
+      if (d.kvlohn)      document.getElementById('u-kvlohn').value = d.kvlohn;
+      if (d.istlohn)     document.getElementById('u-istlohn').value = d.istlohn;
+      if (d.urlaubstage) document.getElementById('u-urlaubstage').value = d.urlaubstage;
+      if (d.besch)       document.getElementById('u-besch').value = d.besch;
+      if (d.created) {
+        const date = d.created.toDate ? d.created.toDate().toLocaleDateString('de-AT') : new Date(d.created).toLocaleDateString('de-AT');
+        document.getElementById('u-created').value = date;
+      }
+
+      console.log('✅ Benutzerprofil geladen');
+    })
+    .catch(err => console.error('❌ Fehler beim Laden des Profils:', err));
+}
+
+function saveUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+
+  const data = {
+    vorname:     document.getElementById('u-vorname').value,
+    nachname:    document.getElementById('u-nachname').value,
+    svnr:        document.getElementById('u-svnr').value,
+    adresse:     document.getElementById('u-adresse').value,
+    firma:       document.getElementById('u-firma').value,
+    firmaadr:    document.getElementById('u-firmaadr').value,
+    pnr:         document.getElementById('u-pnr').value,
+    seit:        document.getElementById('u-seit').value,
+    besch:       document.getElementById('u-besch').value,
+    kvlohn:      parseFloat(document.getElementById('u-kvlohn').value) || 21.96,
+    istlohn:     parseFloat(document.getElementById('u-istlohn').value) || 21.96,
+    azm:         document.getElementById('u-azm').value,
+    urlaubstage: parseInt(document.getElementById('u-urlaubstage').value) || 25,
+    email:       user.email,
+    updated:     new Date()
+  };
+
+  const saveBtn = document.querySelector('[onclick="saveUserProfile()"]');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+
+  db.collection('users').doc(user.uid).update(data)
+    .then(() => {
+      console.log('✅ Profil gespeichert');
+      // Header Name aktualisieren
+      document.getElementById('user-name').textContent = data.vorname || user.email.split('@')[0];
+      alert('✅ Profil gespeichert!');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Speichern:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    });
+}
+
+function changePassword() {
+  const newPass = document.getElementById('u-pass-new').value;
+  const confirmPass = document.getElementById('u-pass-confirm').value;
+
+  if (!newPass) return alert('❌ Bitte neues Passwort eingeben!');
+  if (newPass.length < 6) return alert('❌ Passwort muss mindestens 6 Zeichen lang sein!');
+  if (newPass !== confirmPass) return alert('❌ Passwörter stimmen nicht überein!');
+
+  const user = auth.currentUser;
+  user.updatePassword(newPass)
+    .then(() => {
+      alert('✅ Passwort erfolgreich geändert!');
+      document.getElementById('u-pass-new').value = '';
+      document.getElementById('u-pass-confirm').value = '';
+    })
+    .catch(err => {
+      console.error('❌ Passwort-Fehler:', err);
+      if (err.code === 'auth/requires-recent-login') {
+        alert('❌ Bitte abmelden und neu anmelden, dann Passwort ändern!');
+      } else {
+        alert('❌ Fehler: ' + err.message);
+      }
+    });
+}
+
+</script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js">
+// ═══════════════════════════════════════════════════════════
+// BENUTZERPROFIL FUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function updateKVLohn() {
+  const besch = document.getElementById('u-besch').value;
+  const lohn = besch.split('|')[1] || '21.96';
+  document.getElementById('u-kvlohn').value = lohn;
+  document.getElementById('u-istlohn').value = lohn;
+}
+
+function loadUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  document.getElementById('u-email').value = user.email || '';
+
+  db.collection('users').doc(user.uid).get()
+    .then(doc => {
+      if (!doc.exists) return;
+      const d = doc.data();
+
+      if (d.vorname)     document.getElementById('u-vorname').value = d.vorname;
+      if (d.nachname)    document.getElementById('u-nachname').value = d.nachname;
+      if (d.svnr)        document.getElementById('u-svnr').value = d.svnr;
+      if (d.adresse)     document.getElementById('u-adresse').value = d.adresse;
+      if (d.firma)       document.getElementById('u-firma').value = d.firma;
+      if (d.firmaadr)    document.getElementById('u-firmaadr').value = d.firmaadr;
+      if (d.pnr)         document.getElementById('u-pnr').value = d.pnr;
+      if (d.seit)        document.getElementById('u-seit').value = d.seit;
+      if (d.azm)         document.getElementById('u-azm').value = d.azm;
+      if (d.kvlohn)      document.getElementById('u-kvlohn').value = d.kvlohn;
+      if (d.istlohn)     document.getElementById('u-istlohn').value = d.istlohn;
+      if (d.urlaubstage) document.getElementById('u-urlaubstage').value = d.urlaubstage;
+      if (d.besch)       document.getElementById('u-besch').value = d.besch;
+      if (d.created) {
+        const date = d.created.toDate ? d.created.toDate().toLocaleDateString('de-AT') : new Date(d.created).toLocaleDateString('de-AT');
+        document.getElementById('u-created').value = date;
+      }
+
+      console.log('✅ Benutzerprofil geladen');
+    })
+    .catch(err => console.error('❌ Fehler beim Laden des Profils:', err));
+}
+
+function saveUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+
+  const data = {
+    vorname:     document.getElementById('u-vorname').value,
+    nachname:    document.getElementById('u-nachname').value,
+    svnr:        document.getElementById('u-svnr').value,
+    adresse:     document.getElementById('u-adresse').value,
+    firma:       document.getElementById('u-firma').value,
+    firmaadr:    document.getElementById('u-firmaadr').value,
+    pnr:         document.getElementById('u-pnr').value,
+    seit:        document.getElementById('u-seit').value,
+    besch:       document.getElementById('u-besch').value,
+    kvlohn:      parseFloat(document.getElementById('u-kvlohn').value) || 21.96,
+    istlohn:     parseFloat(document.getElementById('u-istlohn').value) || 21.96,
+    azm:         document.getElementById('u-azm').value,
+    urlaubstage: parseInt(document.getElementById('u-urlaubstage').value) || 25,
+    email:       user.email,
+    updated:     new Date()
+  };
+
+  const saveBtn = document.querySelector('[onclick="saveUserProfile()"]');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+
+  db.collection('users').doc(user.uid).update(data)
+    .then(() => {
+      console.log('✅ Profil gespeichert');
+      // Header Name aktualisieren
+      document.getElementById('user-name').textContent = data.vorname || user.email.split('@')[0];
+      alert('✅ Profil gespeichert!');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Speichern:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    });
+}
+
+function changePassword() {
+  const newPass = document.getElementById('u-pass-new').value;
+  const confirmPass = document.getElementById('u-pass-confirm').value;
+
+  if (!newPass) return alert('❌ Bitte neues Passwort eingeben!');
+  if (newPass.length < 6) return alert('❌ Passwort muss mindestens 6 Zeichen lang sein!');
+  if (newPass !== confirmPass) return alert('❌ Passwörter stimmen nicht überein!');
+
+  const user = auth.currentUser;
+  user.updatePassword(newPass)
+    .then(() => {
+      alert('✅ Passwort erfolgreich geändert!');
+      document.getElementById('u-pass-new').value = '';
+      document.getElementById('u-pass-confirm').value = '';
+    })
+    .catch(err => {
+      console.error('❌ Passwort-Fehler:', err);
+      if (err.code === 'auth/requires-recent-login') {
+        alert('❌ Bitte abmelden und neu anmelden, dann Passwort ändern!');
+      } else {
+        alert('❌ Fehler: ' + err.message);
+      }
+    });
+}
+
+</script>
   
   <style>
     :root {
@@ -318,6 +651,31 @@
       .grid-4 { grid-template-columns: repeat(2, 1fr); }
       .app-header { flex-direction: column; align-items: flex-start; }
     }
+  
+    input[type=text], input[type=number], input[type=date],
+    input[type=email], input[type=tel], input[type=time],
+    input[type=password], select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--bau-border);
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-family: 'Barlow', sans-serif;
+      background: white;
+      color: var(--bau-dark);
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--bau-orange);
+      box-shadow: 0 0 0 2px rgba(255,192,0,0.12);
+    }
+    @media(max-width:768px) {
+      #page-benutzer > div > div:first-child + div,
+      #page-benutzer > div {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -436,7 +794,7 @@
         </div>
         <div class="stat-card">
           <div style="font-size:11px;color:#888;font-weight:600">Version</div>
-          <div class="stat-value" style="font-size:18px">v5.0</div>
+          <div class="stat-value" style="font-size:18px">v1.0</div>
         </div>
         <div class="stat-card">
           <div style="font-size:11px;color:#888;font-weight:600">Speicher</div>
@@ -462,13 +820,110 @@
     
     <!-- BENUTZER PAGE -->
     <section class="page" id="page-benutzer">
-      <div class="card">
-        <h2>👤 Dein Profil</h2>
-        <div style="margin-bottom:12px;">
-          <strong id="user-email" style="font-size:14px;color:var(--bau-steel)">–</strong>
-          <p style="font-size:11px;color:#888;margin-top:4px;">Registriert am: <span id="user-created">–</span></p>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--bau-orange);flex-wrap:wrap;gap:8px;">
+        <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;">👤 Benutzerprofil</h2>
+        <button class="btn" onclick="saveUserProfile()" style="width:auto;padding:8px 16px;">💾 Speichern</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+        <!-- PERSÖNLICHE DATEN -->
+        <div class="card">
+          <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px;color:var(--bau-steel);">Persönliche Daten</h3>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Vorname</label>
+            <input type="text" id="u-vorname" placeholder="Max">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Nachname</label>
+            <input type="text" id="u-nachname" placeholder="Mustermann">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">SV-Nummer</label>
+            <input type="text" id="u-svnr" placeholder="XXXX TTMMJJ">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Adresse</label>
+            <input type="text" id="u-adresse" placeholder="Musterstraße 1, 1010 Wien">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">E-Mail</label>
+            <input type="email" id="u-email" readonly style="background:#F5F2EE;">
+          </div>
+          <div style="margin-bottom:0;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Registriert am</label>
+            <input type="text" id="u-created" readonly style="background:#F5F2EE;">
+          </div>
         </div>
-        <button class="btn" onclick="handleLogout()" style="width:auto;padding:8px 16px;">🚪 Logout</button>
+
+        <!-- DIENSTVERTRAG -->
+        <div class="card">
+          <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px;color:var(--bau-steel);">Dienstvertrag</h3>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Personalnummer</label>
+            <input type="text" id="u-pnr" placeholder="z.B. 1042">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Beschäftigt seit</label>
+            <input type="date" id="u-seit">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Beschäftigt als</label>
+            <select id="u-besch" onchange="updateKVLohn()">
+              <option value="Vizepolier|22.57">Vizepolier – 22,57 €/h</option>
+              <option value="Facharbeiter (a)|21.96" selected>Facharbeiter (a) – 21,96 €/h</option>
+              <option value="Facharbeiter (b)|19.99">Facharbeiter (b) – 19,99 €/h</option>
+              <option value="Bauhilfsarbeiter|17.03">Bauhilfsarbeiter – 17,03 €/h</option>
+            </select>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">KV-Stundenlohn (€)</label>
+            <input type="number" id="u-kvlohn" readonly style="background:#F5F2EE;" step="0.01">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Ist-Stundenlohn (€)</label>
+            <input type="number" id="u-istlohn" step="0.01" placeholder="21.96">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Arbeitsmodell</label>
+            <select id="u-azm">
+              <option value="KL" selected>Kurz-Lang (KL) Woche</option>
+              <option value="40">40-Stunden-Woche</option>
+            </select>
+          </div>
+          <div style="margin-bottom:0;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Urlaubsanspruch (Tage/Jahr)</label>
+            <input type="number" id="u-urlaubstage" value="25">
+          </div>
+        </div>
+
+        <!-- FIRMA -->
+        <div class="card">
+          <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px;color:var(--bau-steel);">Firma</h3>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Firmenname</label>
+            <input type="text" id="u-firma" placeholder="Musterbau GmbH">
+          </div>
+          <div style="margin-bottom:0;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Firmenadresse</label>
+            <input type="text" id="u-firmaadr" placeholder="Firmenstraße 1, 1010 Wien">
+          </div>
+        </div>
+
+        <!-- PASSWORT ÄNDERN -->
+        <div class="card">
+          <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px;color:var(--bau-steel);">Passwort ändern</h3>
+          <div style="margin-bottom:12px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Neues Passwort</label>
+            <input type="password" id="u-pass-new" placeholder="Leer lassen = keine Änderung">
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="display:block;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;margin-bottom:4px;">Neues Passwort bestätigen</label>
+            <input type="password" id="u-pass-confirm" placeholder="Passwort wiederholen">
+          </div>
+          <button class="btn" onclick="changePassword()" style="background:var(--bau-steel);">🔑 Passwort ändern</button>
+        </div>
+
       </div>
     </section>
     
@@ -523,13 +978,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBTgaMibl5Ne2zK1JbxmKf32Rjlq4j4BfM",
-  authDomain: "bazer-a463d.firebaseapp.com",
-  projectId: "bazer-a463d",
-  storageBucket: "bazer-a463d.firebasestorage.app",
-  messagingSenderId: "993984468589",
-  appId: "1:993984468589:web:07fba9e4db547477a69164",
-  measurementId: "G-Z54NF7VQNQ"
+  apiKey: "YOUR_API_KEY_HERE",
+  authDomain: "bazer-bau.firebaseapp.com",
+  projectId: "bazer-bau",
+  storageBucket: "bazer-bau.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_ID",
+  appId: "YOUR_APP_ID"
 };
 
 let auth, db;
@@ -684,20 +1138,7 @@ function showApp() {
     document.getElementById('user-email').textContent = '📧 ' + user.email;
     
     // Lade Benutzerdaten aus Firestore
-    db.collection('users').doc(user.uid).get()
-      .then(doc => {
-        if (doc.exists) {
-          const data = doc.data();
-          if (data.vorname) {
-            document.getElementById('user-name').textContent = data.vorname;
-          }
-          if (data.created) {
-            const date = data.created.toDate().toLocaleDateString('de-AT');
-            document.getElementById('user-created').textContent = date;
-          }
-        }
-      })
-      .catch(err => console.error('Fehler beim Laden der Benutzerdaten:', err));
+    setTimeout(() => loadUserProfile(), 300);
   }
 }
 
@@ -711,6 +1152,7 @@ function showPage(id) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   event.target.classList.add('active');
+  if (id === 'benutzer') loadUserProfile();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -735,6 +1177,117 @@ if (isFirebaseReady) {
     alert('⚠️ Firebase nicht konfiguriert!\n\nSiehe BAZER_v5_ANLEITUNG.md für Setup.');
   }, 500);
 }
+
+// ═══════════════════════════════════════════════════════════
+// BENUTZERPROFIL FUNKTIONEN
+// ═══════════════════════════════════════════════════════════
+
+function updateKVLohn() {
+  const besch = document.getElementById('u-besch').value;
+  const lohn = besch.split('|')[1] || '21.96';
+  document.getElementById('u-kvlohn').value = lohn;
+  document.getElementById('u-istlohn').value = lohn;
+}
+
+function loadUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  document.getElementById('u-email').value = user.email || '';
+
+  db.collection('users').doc(user.uid).get()
+    .then(doc => {
+      if (!doc.exists) return;
+      const d = doc.data();
+
+      if (d.vorname)     document.getElementById('u-vorname').value = d.vorname;
+      if (d.nachname)    document.getElementById('u-nachname').value = d.nachname;
+      if (d.svnr)        document.getElementById('u-svnr').value = d.svnr;
+      if (d.adresse)     document.getElementById('u-adresse').value = d.adresse;
+      if (d.firma)       document.getElementById('u-firma').value = d.firma;
+      if (d.firmaadr)    document.getElementById('u-firmaadr').value = d.firmaadr;
+      if (d.pnr)         document.getElementById('u-pnr').value = d.pnr;
+      if (d.seit)        document.getElementById('u-seit').value = d.seit;
+      if (d.azm)         document.getElementById('u-azm').value = d.azm;
+      if (d.kvlohn)      document.getElementById('u-kvlohn').value = d.kvlohn;
+      if (d.istlohn)     document.getElementById('u-istlohn').value = d.istlohn;
+      if (d.urlaubstage) document.getElementById('u-urlaubstage').value = d.urlaubstage;
+      if (d.besch)       document.getElementById('u-besch').value = d.besch;
+      if (d.created) {
+        const date = d.created.toDate ? d.created.toDate().toLocaleDateString('de-AT') : new Date(d.created).toLocaleDateString('de-AT');
+        document.getElementById('u-created').value = date;
+      }
+
+      console.log('✅ Benutzerprofil geladen');
+    })
+    .catch(err => console.error('❌ Fehler beim Laden des Profils:', err));
+}
+
+function saveUserProfile() {
+  const user = auth.currentUser;
+  if (!user) return alert('❌ Nicht angemeldet!');
+
+  const data = {
+    vorname:     document.getElementById('u-vorname').value,
+    nachname:    document.getElementById('u-nachname').value,
+    svnr:        document.getElementById('u-svnr').value,
+    adresse:     document.getElementById('u-adresse').value,
+    firma:       document.getElementById('u-firma').value,
+    firmaadr:    document.getElementById('u-firmaadr').value,
+    pnr:         document.getElementById('u-pnr').value,
+    seit:        document.getElementById('u-seit').value,
+    besch:       document.getElementById('u-besch').value,
+    kvlohn:      parseFloat(document.getElementById('u-kvlohn').value) || 21.96,
+    istlohn:     parseFloat(document.getElementById('u-istlohn').value) || 21.96,
+    azm:         document.getElementById('u-azm').value,
+    urlaubstage: parseInt(document.getElementById('u-urlaubstage').value) || 25,
+    email:       user.email,
+    updated:     new Date()
+  };
+
+  const saveBtn = document.querySelector('[onclick="saveUserProfile()"]');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Speichert...'; }
+
+  db.collection('users').doc(user.uid).update(data)
+    .then(() => {
+      console.log('✅ Profil gespeichert');
+      // Header Name aktualisieren
+      document.getElementById('user-name').textContent = data.vorname || user.email.split('@')[0];
+      alert('✅ Profil gespeichert!');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    })
+    .catch(err => {
+      console.error('❌ Fehler beim Speichern:', err);
+      alert('❌ Fehler: ' + err.message);
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Speichern'; }
+    });
+}
+
+function changePassword() {
+  const newPass = document.getElementById('u-pass-new').value;
+  const confirmPass = document.getElementById('u-pass-confirm').value;
+
+  if (!newPass) return alert('❌ Bitte neues Passwort eingeben!');
+  if (newPass.length < 6) return alert('❌ Passwort muss mindestens 6 Zeichen lang sein!');
+  if (newPass !== confirmPass) return alert('❌ Passwörter stimmen nicht überein!');
+
+  const user = auth.currentUser;
+  user.updatePassword(newPass)
+    .then(() => {
+      alert('✅ Passwort erfolgreich geändert!');
+      document.getElementById('u-pass-new').value = '';
+      document.getElementById('u-pass-confirm').value = '';
+    })
+    .catch(err => {
+      console.error('❌ Passwort-Fehler:', err);
+      if (err.code === 'auth/requires-recent-login') {
+        alert('❌ Bitte abmelden und neu anmelden, dann Passwort ändern!');
+      } else {
+        alert('❌ Fehler: ' + err.message);
+      }
+    });
+}
+
 </script>
 
 </body>
