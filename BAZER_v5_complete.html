@@ -569,6 +569,10 @@
 // ═══════════════════════════════════════════════════════════
 
 // TODO: Ersetze diese Werte mit deinen Firebase Config-Daten!
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+
 const firebaseConfig = {
   apiKey: "AIzaSyBTgaMibl5Ne2zK1JbxmKf32Rjlq4j4BfM",
   authDomain: "bazer-a463d.firebaseapp.com",
@@ -578,19 +582,10 @@ const firebaseConfig = {
   appId: "1:993984468589:web:07fba9e4db547477a69164"
 };
 
-let auth, db;
-let isFirebaseReady = false;
+const app = initializeApp(firebaseConfig);
 
-try {
-  firebase.initializeApp(firebaseConfig);
-  auth = firebase.auth();
-  db = firebase.firestore();
-  isFirebaseReady = true;
-  console.log('✅ Firebase initialisiert');
-} catch(err) {
-  console.error('❌ Firebase Fehler:', err);
-  console.warn('Firebase nicht konfiguriert. Siehe BAZER_v5_REQUIREMENTS.md');
-}
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 
 // ═══════════════════════════════════════════════════════════
 // AUTH FUNKTIONEN
