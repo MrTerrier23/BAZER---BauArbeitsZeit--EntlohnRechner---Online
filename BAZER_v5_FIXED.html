@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-  <title>BAZER v5 – Online Arbeitszeiterfassung</title>
+  <title>BAZER – BauArbeitsZeit- & Entlohnrechner Online</title>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#ffc000">
@@ -328,12 +328,12 @@
 <div id="auth-screen">
   <div class="auth-box">
     <div style="text-align:center;margin-bottom:20px;">
-      <div style="width:60px;height:60px;background:#ffc000;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:white;font-size:32px;">BZ</div>
+      <div style="width:120px;height:60px;background:#ffc000;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:white;font-size:32px;">BAZER</div>
     </div>
     
     <div id="login-form">
       <h1>Anmelden</h1>
-      <p>BAZER v5 – Online Arbeitszeiterfassung</p>
+      <p>BAZER – BauArbeitsZeit- und Entlohnrechner Online</p>
       
       <div class="form-group">
         <label>E-Mail</label>
@@ -396,7 +396,7 @@
 <div id="app-container" class="hidden">
   <div class="app-header">
     <div class="app-header-left">
-      <h1>BAZER v5 – <span style="color:#ffc000;">Online</span></h1>
+      <h1>BAZER – <span style="color:#ffc000;">Online</span></h1>
       <p>Willkommen, <strong id="user-name">User</strong>!</p>
     </div>
     <button onclick="handleLogout()">🚪 Logout</button>
@@ -417,7 +417,7 @@
     <!-- HOME PAGE -->
     <section class="page active" id="page-home">
       <div class="hero-banner">
-        <div class="hero-title">Willkommen in BAZER v5!</div>
+        <div class="hero-title">Willkommen in BAZER! Dem ONLINE BauArbeitszeit- & Entlohnrechner</div>
         <p>Online · Cloud-gespeichert · Echtzeit-Sync · Für dein ganzes Team</p>
       </div>
       
@@ -445,7 +445,7 @@
       </div>
       
       <div class="card">
-        <h2>🚀 v5.0 ist LIVE!</h2>
+        <h2>🚀 v1.0 ist LIVE!</h2>
         <p style="color:#666;font-size:13px;line-height:1.8;">
           ✅ Multi-User Login System<br>
           ✅ Firebase Cloud Storage<br>
@@ -476,42 +476,42 @@
     <section class="page" id="page-azerfassung">
       <div class="card">
         <h2>⏱ Arbeitszeiterfassung</h2>
-        <p style="color:#888;font-size:12px;">Kommt in v5.1 – Vollständige AZ-Erfassung mit KL-Kalender 2026.</p>
+        <p style="color:#888;font-size:12px;">Kommt in v1.1 – Vollständige AZ-Erfassung mit KL-Kalender 2026.</p>
       </div>
     </section>
     
     <section class="page" id="page-lohnzettel">
       <div class="card">
         <h2>🧾 Lohnzettel</h2>
-        <p style="color:#888;font-size:12px;">Kommt in v5.1 – Automatische Lohnzettel-Berechnung.</p>
+        <p style="color:#888;font-size:12px;">Kommt in v1.1 – Automatische Lohnzettel-Berechnung.</p>
       </div>
     </section>
     
     <section class="page" id="page-kalender">
       <div class="card">
         <h2>📅 Kalender 2026</h2>
-        <p style="color:#888;font-size:12px;">Kommt in v5.1 – KL-Kalender mit BGH-Daten.</p>
+        <p style="color:#888;font-size:12px;">Kommt in v1.1 – KL-Kalender mit GBH-Daten.</p>
       </div>
     </section>
     
     <section class="page" id="page-baustellen">
       <div class="card">
         <h2>🏗 Baustellen</h2>
-        <p style="color:#888;font-size:12px;">Kommt in v5.1 – Baustellen-Management.</p>
+        <p style="color:#888;font-size:12px;">Kommt in v1.1 – Baustellen-Management.</p>
       </div>
     </section>
     
     <section class="page" id="page-bruttonetto">
       <div class="card">
         <h2>💶 Brutto-Netto Rechner</h2>
-        <p style="color:#888;font-size:12px;">Kommt in v5.1 – Nach KV Bau 2026.</p>
+        <p style="color:#888;font-size:12px;">Kommt in v1.1 – Nach KV Bau 2026.</p>
       </div>
     </section>
     
     <section class="page" id="page-admin">
       <div class="card">
         <h2>⚙️ Admin-Bereich</h2>
-        <p style="color:#888;font-size:12px;">Kommt in v5.1 – Benutzer-Verwaltung, Exports.</p>
+        <p style="color:#888;font-size:12px;">Kommt in v1.1 – Benutzer-Verwaltung, Exports.</p>
       </div>
     </section>
   </div>
@@ -523,12 +523,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "bazer-bau.firebaseapp.com",
-  projectId: "bazer-bau",
-  storageBucket: "bazer-bau.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBTgaMibl5Ne2zK1JbxmKf32Rjlq4j4BfM",
+  authDomain: "bazer-a463d.firebaseapp.com",
+  projectId: "bazer-a463d",
+  storageBucket: "bazer-a463d.firebasestorage.app",
+  messagingSenderId: "993984468589",
+  appId: "1:993984468589:web:07fba9e4db547477a69164",
+  measurementId: "G-Z54NF7VQNQ"
 };
 
 let auth, db;
